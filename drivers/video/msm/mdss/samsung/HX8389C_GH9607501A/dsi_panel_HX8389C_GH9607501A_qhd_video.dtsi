@@ -60,8 +60,8 @@
 					];
 		qcom,mdss-dsi-off-command = [
 						/* < Deep Sleep In Sequence > */
-						39 01 00 00 28 00 02 28 00
-						39 01 00 00 64 00 02 10 00
+						39 01 00 00 3C 00 02 28 00
+						39 01 00 00 3C 00 02 10 00
 					];
 		qcom,mdss-dsi-panel-type = "dsi_video_mode";
 		qcom,lcd-esd-det-gpio = <&msm_gpio 69 0>;
@@ -105,9 +105,11 @@
 		qcom,mdss-pan-physical-width-dimension = <62>; /* <Width> real size of panel in mm */
 		qcom,mdss-pan-physical-height-dimension = <110>; /*<Height> real size of panel in mm */
 		qcom,mdss-dsi-lp11-init;
-		qcom,mdss-force-clk-lane-hs = <0>;
+		qcom,mdss-force-clk-lane-hs;
 		qcom,mdss-dsi-init-delay-us = <100>;
-		qcom,mdss-power-off-delay-us = <12000>;
+		qcom,mdss-power-off-delay-us = <200>;
+		samsung,mdss-dsi-off-reset-delay-us = <200>;
+		samsung,mdss-power-on-reset-delay-us = <100>;
 /*
  * ************************************************************************************************************************************
  *

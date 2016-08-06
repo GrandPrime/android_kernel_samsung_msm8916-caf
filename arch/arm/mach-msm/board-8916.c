@@ -94,7 +94,7 @@ static void __init msm8916_init(void)
 #endif
 
 #ifdef CONFIG_PROC_AVC
-    	sec_avc_log_init();
+	sec_avc_log_init();
 #endif
 
 	/*

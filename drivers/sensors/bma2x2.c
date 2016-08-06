@@ -50,6 +50,10 @@
 #define CHIP_NAME		"BMC150"
 #define SENSOR_NAME		"accelerometer_sensor"
 #define CALIBRATION_FILE_PATH	"/efs/FactoryApp/calibration_data"
+#define CALIBRATION_DATA_AMOUNT         20
+#define MAX_ACCEL_1G			1024
+#define MAX_ACCEL_1G_FOR4G		512
+#define ACCEL_LOG_TIME                  10/* 10 sec */
 
 struct bma2x2_v {
 	union {
@@ -60,6 +64,12 @@ struct bma2x2_v {
 			s16 z;
 		};
 	};
+};
+
+
+enum {
+	OFF = 0,
+	ON = 1
 };
 
 
@@ -80,17 +90,20 @@ struct bma2x2_data {
 	struct input_dev *input;
 
 	struct bma2x2_v value;
+	struct bma2x2_v caldata;
 	struct mutex value_mutex;
 	struct mutex enable_mutex;
 	struct mutex mode_mutex;
 	struct delayed_work work;
 	struct work_struct irq_work;
 	int IRQ;
+	u64 old_timestamp;
 
 	int bma_mode_enabled;
 	atomic_t reactive_enable;
 	atomic_t reactive_state;
 	atomic_t factory_mode;
+	int time_count;
 
 #ifdef CONFIG_SENSORS_BMC150_VDD
 	struct regulator *reg_vdd;
@@ -98,6 +111,7 @@ struct bma2x2_data {
 	struct regulator *reg_vio;
 	int place;
 	int acc_int1;
+	int range;
 	unsigned char used_bw;
 };
 
@@ -402,6 +416,26 @@ static int bma2x2_set_slope_threshold(struct i2c_client *client,
 	return comres;
 }
 
+#ifndef CONFIG_SEC_FORTUNA_PROJECT
+static int bma2x2_set_slope_duration(struct i2c_client *client, unsigned char
+		duration)
+{
+	int comres = 0;
+	unsigned char data;
+
+	comres = bma2x2_smbus_read_byte(client,
+			BMA2X2_SLOPE_DUR__REG, &data);
+
+	pr_info("%s: data[%x]\n", __func__, data);
+
+	data = BMA2X2_SET_BITSLICE(data, BMA2X2_SLOPE_DUR, duration);
+	comres += bma2x2_smbus_write_byte(client,
+			BMA2X2_SLOPE_DUR__REG, &data);
+
+	return comres;
+}
+#endif
+
 /*!
  * brief: bma2x2 switch from normal to suspend mode
  * @param[i] bma2x2
@@ -449,6 +483,88 @@ static int bma2x2_normal_to_suspend(struct bma2x2_data *bma2x2,
 	}
 
 }
+
+#ifndef CONFIG_SEC_FORTUNA_PROJECT
+static int bma2x2_open_calibration(struct bma2x2_data *data)
+{
+	int ret = 0;
+	mm_segment_t old_fs;
+	struct file *cal_filp = NULL;
+
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+
+	cal_filp = filp_open(CALIBRATION_FILE_PATH, O_RDONLY, 0666);
+	if (IS_ERR(cal_filp)) {
+		set_fs(old_fs);
+		ret = PTR_ERR(cal_filp);
+
+		data->caldata.x = 0;
+		data->caldata.y = 0;
+		data->caldata.z = 0;
+
+		pr_info("[SENSOR]: %s - No Calibration\n", __func__);
+
+		return ret;
+	}
+
+	ret = cal_filp->f_op->read(cal_filp, (char *)&data->caldata.v,
+		3 * sizeof(s16), &cal_filp->f_pos);
+	if (ret != 3 * sizeof(s16)) {
+		pr_err("[SENSOR] %s: - Can't read the cal data\n", __func__);
+		ret = -EIO;
+	}
+
+	filp_close(cal_filp, current->files);
+	set_fs(old_fs);
+
+	pr_info("[SENSOR]: open accel calibration %d, %d, %d\n",
+		data->caldata.x, data->caldata.y, data->caldata.z);
+
+	if ((data->caldata.x == 0) && (data->caldata.y == 0)
+		&& (data->caldata.z == 0))
+		return -EIO;
+
+	return ret;
+}
+
+static int bma2x2_set_range(struct i2c_client *client, unsigned char Range)
+{
+	int comres = 0;
+	unsigned char data1;
+
+	if ((Range == 3) || (Range == 5) || (Range == 8) || (Range == 12)) {
+		comres = bma2x2_smbus_read_byte(client, BMA2X2_RANGE_SEL_REG,
+				&data1);
+		switch (Range) {
+		case BMA2X2_RANGE_2G:
+			data1  = BMA2X2_SET_BITSLICE(data1,
+					BMA2X2_RANGE_SEL, 3);
+			break;
+		case BMA2X2_RANGE_4G:
+			data1  = BMA2X2_SET_BITSLICE(data1,
+					BMA2X2_RANGE_SEL, 5);
+			break;
+		case BMA2X2_RANGE_8G:
+			data1  = BMA2X2_SET_BITSLICE(data1,
+					BMA2X2_RANGE_SEL, 8);
+			break;
+		case BMA2X2_RANGE_16G:
+			data1  = BMA2X2_SET_BITSLICE(data1,
+					BMA2X2_RANGE_SEL, 12);
+			break;
+		default:
+			break;
+		}
+		comres += bma2x2_smbus_write_byte(client, BMA2X2_RANGE_SEL_REG,
+				&data1);
+	} else {
+		comres = -1;
+	}
+
+	return comres;
+}
+#endif
 
 static int bma2x2_set_mode(struct i2c_client *client, unsigned char mode,
 						unsigned char enabled_mode)
@@ -547,15 +663,10 @@ static int bma2x2_get_mode(struct i2c_client *client, unsigned char *mode)
 
 	if ((data1 == 0x00) && (data2 == 0x00))
 		*mode  = BMA2X2_MODE_NORMAL;
-	else {
-		if ((data1 == 0x02) && (data2 == 0x00)) 
-			*mode  = BMA2X2_MODE_LOWPOWER1;
-		else {
-			if ((data1 == 0x04 || data1 == 0x06) &&
-						(data2 == 0x00))
-				*mode  = BMA2X2_MODE_SUSPEND;
-		}
-	}
+	else if ((data1 == 0x02) && (data2 == 0x00))
+		*mode  = BMA2X2_MODE_LOWPOWER1;
+	else if ((data1 == 0x04 || data1 == 0x06) && (data2 == 0x00))
+		*mode  = BMA2X2_MODE_SUSPEND;
 
 	return comres;
 }
@@ -1002,15 +1113,55 @@ static void bma2x2_work_func(struct work_struct *work)
 			struct bma2x2_data, work);
 	static struct bma2x2_v acc;
 	unsigned long delay = msecs_to_jiffies(atomic_read(&bma2x2->delay));
+	struct timespec ts = ktime_to_timespec(ktime_get_boottime());
+	u64 timestamp_new = ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+	u64 timestamp ;
+	int time_hi, time_lo;
 
 	bma2x2_read_accel_xyz(bma2x2->bma2x2_client, bma2x2->sensor_type, &acc);
+
+	if (((timestamp_new - bma2x2->old_timestamp) > atomic_read(&bma2x2->delay)*1800000LL)\
+		&& (bma2x2->old_timestamp != 0))
+	{
+		timestamp = (timestamp_new + bma2x2->old_timestamp) >>  1;
+		time_hi = (int)((timestamp & TIME_HI_MASK) >> TIME_HI_SHIFT);
+		time_lo = (int)(timestamp & TIME_LO_MASK);
+
+		input_report_rel(bma2x2->input, REL_X, acc.x);
+		input_report_rel(bma2x2->input, REL_Y, acc.y);
+		input_report_rel(bma2x2->input, REL_Z, acc.z);
+		input_report_rel(bma2x2->input, REL_DIAL, time_hi);
+		input_report_rel(bma2x2->input, REL_MISC, time_lo);
+		input_sync(bma2x2->input);
+	}
+	time_hi = (int)((timestamp_new & TIME_HI_MASK) >> TIME_HI_SHIFT);
+	time_lo = (int)(timestamp_new & TIME_LO_MASK);
+
 	input_report_rel(bma2x2->input, REL_X, acc.x);
 	input_report_rel(bma2x2->input, REL_Y, acc.y);
 	input_report_rel(bma2x2->input, REL_Z, acc.z);
+	input_report_rel(bma2x2->input, REL_DIAL, time_hi);
+	input_report_rel(bma2x2->input, REL_MISC, time_lo);
 	input_sync(bma2x2->input);
+
+	bma2x2->old_timestamp = timestamp_new;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	mutex_lock(&bma2x2->value_mutex);
 	bma2x2->value = acc;
 	mutex_unlock(&bma2x2->value_mutex);
+#endif
+#ifndef CONFIG_SEC_FORTUNA_PROJECT
+	exit:
+	if ((atomic_read(&bma2x2->delay) * bma2x2->time_count)
+		>= (ACCEL_LOG_TIME * MSEC_PER_SEC)) {
+			pr_info("[SENSOR]: %s - x = %d, y = %d, z = %d \n",
+				__func__, bma2x2->value.x, bma2x2->value.y,
+			bma2x2->value.z);
+		bma2x2->time_count = 0;
+	} else {
+		bma2x2->time_count++;
+	}
+#endif
 	schedule_delayed_work(&bma2x2->work, delay);
 }
 
@@ -1020,9 +1171,28 @@ static ssize_t bma2x2_raw_data_read(struct device *dev,
 	struct input_dev *input = to_input_dev(dev);
 	struct bma2x2_data *bma2x2 = input_get_drvdata(input);
 	struct bma2x2_v acc_value;
+#ifndef CONFIG_SEC_FORTUNA_PROJECT
+	if (atomic_read(&bma2x2->enable) == OFF) {
+		bma2x2_set_mode(bma2x2->bma2x2_client,
+				BMA2X2_MODE_NORMAL, BMA_ENABLED_INPUT);
 
-	bma2x2_read_accel_xyz(bma2x2->bma2x2_client, bma2x2->sensor_type,
+		msleep(20);
+#endif
+		bma2x2_read_accel_xyz(bma2x2->bma2x2_client, bma2x2->sensor_type,
 								&acc_value);
+
+
+#ifndef CONFIG_SEC_FORTUNA_PROJECT
+		bma2x2_set_mode(bma2x2->bma2x2_client,
+				BMA2X2_MODE_SUSPEND, BMA_ENABLED_INPUT);
+
+		acc_value.x = acc_value.x - bma2x2->caldata.x;
+		acc_value.y = acc_value.y - bma2x2->caldata.y;
+		acc_value.z = acc_value.z - bma2x2->caldata.z;
+	} else {
+		acc_value = bma2x2->value;
+	}
+#endif
 
 	return sprintf(buf, "%d,%d,%d\n", acc_value.x, acc_value.y,
 			acc_value.z);
@@ -1054,16 +1224,19 @@ static ssize_t bma2x2_delay_store(struct device *dev,
 
 	data = data / 1000000L;
 
+	pr_info("[SENSOR] %s [%d]\n", __func__, (int)data);
+
 	if (data > BMA2X2_MAX_DELAY)
 		data = BMA2X2_MAX_DELAY;
-	pr_info("%s [%d]\n", __func__, (int)data);
-
+	else if (data < BMA2X2_MIN_DELAY)
+		data = BMA2X2_MIN_DELAY;
 	atomic_set(&bma2x2->delay, (unsigned int) data);
 
 	/*set bandwidth */
 	switch (data) {
 	case 0:
 	case 1:
+	case 5:
 	case 10:
 		bw = 0x0b; /*100Hz*/
 		break;
@@ -1083,7 +1256,7 @@ static ssize_t bma2x2_delay_store(struct device *dev,
 	if (bw >= 0x08) {
 		if (bma2x2_set_bandwidth(bma2x2->bma2x2_client,
 					(unsigned char) bw) < 0) {
-			printk(KERN_INFO " failed to set bandwidth\n");
+			pr_info("[SENSOR]: %s failed to set bandwidth\n", __func__);
 			return -EINVAL;
 		}
 	}
@@ -1108,18 +1281,19 @@ static void bma2x2_set_enable(struct device *dev, int enable)
 	struct bma2x2_data *bma2x2 = i2c_get_clientdata(client);
 	int pre_enable = atomic_read(&bma2x2->enable);
 
-	pr_info("%s [%d]\n", __func__, enable);
+	pr_info("[SENSOR] %s enable: [%d], pre_enable: [%d]\n", __func__, enable, pre_enable);
 
 	mutex_lock(&bma2x2->enable_mutex);
 	if (enable) {
 		if (pre_enable == 0) {
+			bma2x2->old_timestamp = 0LL;
 			bma2x2_set_mode(bma2x2->bma2x2_client,
 					BMA2X2_MODE_NORMAL, BMA_ENABLED_INPUT);
 			schedule_delayed_work(&bma2x2->work,
 				msecs_to_jiffies(atomic_read(&bma2x2->delay)));
 			atomic_set(&bma2x2->enable, 1);
+			pr_info("[SENSOR] %s enable: [%d] \n", __func__, atomic_read(&bma2x2->enable));
 		}
-
 	} else {
 		if (pre_enable == 1) {
 			if (atomic_read(&bma2x2->reactive_enable) == 0)
@@ -1137,12 +1311,15 @@ static ssize_t bma2x2_enable_store(struct device *dev,
 		struct device_attribute *attr,
 		const char *buf, size_t count)
 {
-	unsigned long data;
+	unsigned long data = 0;
 	int error;
 
 	error = kstrtoul(buf, 10, &data);
 	if (error)
 		return error;
+
+	pr_info("[SENSOR] %s [%lu]\n", __func__, data);
+
 	if ((data == 0) || (data == 1))
 		bma2x2_set_enable(dev, data);
 

@@ -1,5 +1,4 @@
 ifeq ($(CONFIG_OF),y)
-
 dtb-$(CONFIG_ARCH_MSM8974) += msm8974-v1-cdp.dtb \
 	msm8974-v1-fluid.dtb \
 	msm8974-v1-liquid.dtb \
@@ -54,6 +53,12 @@ ifeq ($(CONFIG_SEC_A5_EUR_PROJECT),y)
       dtb-y += msm8916-sec-a5-eur-r06.dtb
       dtb-y += msm8916-sec-a5-eur-r07.dtb
       dtb-y += msm8916-sec-a5-eur-r08.dtb
+endif
+
+ifeq ($(CONFIG_SEC_FORTUNA_PROJECT),y)
+	dtb-y += msm8916-sec-fortuna-eur-r00.dtb
+	dtb-y += msm8916-sec-fortuna-eur-r01.dtb
+	dtb-y += msm8916-sec-fortuna-eur-r02.dtb
 endif
 
 ifeq ($(CONFIG_ARCH_MSM8916),y)

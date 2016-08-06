@@ -23,7 +23,14 @@
 #define SLOPE_Y_INDEX			6
 #define SLOPE_Z_INDEX			7
 #define BMA2X2_MAX_DELAY		200
+#define BMA2X2_MIN_DELAY		10
+
+#ifndef CONFIG_SENSORS_ACCELEROMETER_2G
 #define BMA2X2_RANGE_SET		5  /* +/- 4G */
+#else
+#define BMA2X2_RANGE_SET		3  /* +/- 2G */
+#endif
+
 #define BMA2X2_BW_SET			12 /* 125HZ  */
 
 #define LOW_G_INTERRUPT				REL_Z

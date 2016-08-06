@@ -53,8 +53,6 @@
 #include <linux/proc_fs.h>
 #endif
 
-
-
 #define CREATE_TRACE_POINTS
 #include <trace/events/printk.h>
 
@@ -241,7 +239,6 @@ struct log {
 static DEFINE_RAW_SPINLOCK(logbuf_lock);
 
 #ifdef CONFIG_PRINTK
-
 #ifdef CONFIG_SEC_DEBUG
 static void sec_log_add(const struct log *msg);
 #endif
@@ -362,17 +359,6 @@ static char *log_dict(const struct log *msg)
 {
 	return (char *)msg + sizeof(struct log) + msg->text_len;
 }
-
-#ifdef CONFIG_SEC_DEBUG_SUBSYS
-void sec_debug_subsys_set_kloginfo(unsigned int *idx_paddr,
-	unsigned int *log_paddr, unsigned int *size)
-{
-	*idx_paddr = (unsigned int)&sec_log_end -
-		CONFIG_PAGE_OFFSET + CONFIG_PHYS_OFFSET;
-	*log_paddr = (unsigned int)sec_log_save_base;
-	*size = (unsigned int)sec_log_save_size;
-}
-#endif
 
 /* get record by index; idx must point to valid msg */
 static struct log *log_from_idx(u32 idx, bool logbuf)
@@ -2103,8 +2089,6 @@ static void sec_log_add_on_bootup(void)
 	}
 }
 
-/* This is temporarily disabled until we get support from Bootloader */
-#if 0 
 #ifdef CONFIG_SEC_DEBUG_SUBSYS
 void sec_debug_subsys_set_kloginfo(unsigned int *first_idx_paddr,
 	unsigned int *next_idx_paddr, unsigned int *log_paddr,
@@ -2115,7 +2099,6 @@ void sec_debug_subsys_set_kloginfo(unsigned int *first_idx_paddr,
 	*log_paddr = (unsigned int)__pa(log_buf);
 	*size = __LOG_BUF_LEN;
 }
-#endif
 #endif
 
 #if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP) && defined(CONFIG_SEC_LOG_LAST_KMSG)
@@ -2222,7 +2205,7 @@ static int __init printk_remap_nocache(void)
 
 	raw_spin_lock_irqsave(&logbuf_lock, flags);
 	/*We have to save logs printed prior to
-	the sec log initialization here.*/
+	  the sec log initialization here.*/
 	sec_log_add_on_bootup();
 	raw_spin_unlock_irqrestore(&logbuf_lock, flags);
 #if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP) && defined(CONFIG_SEC_LOG_LAST_KMSG)

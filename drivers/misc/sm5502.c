@@ -376,11 +376,11 @@ static void sm5502_reg_init(struct sm5502_usbsw *usbsw)
 	ret = i2c_smbus_write_byte_data(client, REG_TIMING_SET1, 0x04);
 	if (ret < 0)
 		dev_err(&client->dev, "%s: err %d\n", __func__, ret);
-        /*Modify from supplier, to enble charge pump to enable the negative power supply.*/
-        /*IF not, to insert earphone and play mp3 with the maximum volume, messy code output UART.*/
-        ret = i2c_smbus_write_byte_data(client, REG_CHGPUMP_SET, 0x00);
-        if (ret < 0)
-            dev_err(&client->dev, "%s: err %d\n", __func__, ret);
+	/*Modify from supplier, to enble charge pump to enable the negative power supply.*/
+	/*IF not, to insert earphone and play mp3 with the maximum volume, messy code output UART.*/
+	ret = i2c_smbus_write_byte_data(client, REG_CHGPUMP_SET, 0x00);
+	if (ret < 0)
+		dev_err(&client->dev, "%s: err %d\n", __func__, ret);
 }
 
 static ssize_t sm5502_muic_show_attached_dev(struct device *dev,
@@ -925,6 +925,9 @@ static void muic_rustproof_feature(struct i2c_client *client, int state)
 			SW_ALL_OPEN_WITH_VBUS);
 		if (val < 0)
 			dev_info(&client->dev, "%s:MANUAL SW1,err %d\n", __func__, val);
+		val = i2c_smbus_write_byte_data(client, REG_MANUAL_SW2, 0x04);
+		if (val < 0)
+			dev_info(&client->dev, "%s: MANUAL SW2,err %d\n", __func__, val);
 		val = i2c_smbus_read_byte_data(client, REG_CONTROL);
 		if (val < 0)
 			dev_info(&client->dev, "%s:CTRL REG,err %d\n", __func__, val);
@@ -933,12 +936,6 @@ static void muic_rustproof_feature(struct i2c_client *client, int state)
 		if (val < 0)
 			dev_info(&client->dev, "%s:CTRL REG,err %d\n", __func__, val);
 	} else {
-		val = i2c_smbus_write_byte_data(client, REG_MANUAL_SW2, 0x00);
-		if (val < 0)
-			dev_info(&client->dev, "%s: MANUAL SW2,err %d\n", __func__, val);
-		val = i2c_smbus_write_byte_data(client, REG_MANUAL_SW1, SW_ALL_OPEN);
-		if (val < 0)
-			dev_info(&client->dev, "%s: MANUAL SW1,err %d\n", __func__, val);
 		val = i2c_smbus_read_byte_data(client, REG_CONTROL);
 		if (val < 0)
 			dev_info(&client->dev, "%s: CTRL REG,err %d\n", __func__, val);
@@ -946,6 +943,12 @@ static void muic_rustproof_feature(struct i2c_client *client, int state)
 		val = i2c_smbus_write_byte_data(client, REG_CONTROL, val);
 		if (val < 0)
 			dev_info(&client->dev, "%s: CTRL REG,err %d\n", __func__, val);
+		val = i2c_smbus_write_byte_data(client, REG_MANUAL_SW2, 0x00);
+		if (val < 0)
+			dev_info(&client->dev, "%s: MANUAL SW2,err %d\n", __func__, val);
+		val = i2c_smbus_write_byte_data(client, REG_MANUAL_SW1, SW_ALL_OPEN);
+		if (val < 0)
+			dev_info(&client->dev, "%s: MANUAL SW1,err %d\n", __func__, val);
 	}
 }
 #endif
@@ -1072,13 +1075,17 @@ static int sm5502_attach_dev(struct sm5502_usbsw *usbsw)
 		pdata->callback(CABLE_TYPE_CDP, SM5502_ATTACHED);
 		usbsw->attached_dev = ATTACHED_DEV_CDP_MUIC;
 	/* UART */
-	} else if (val1 & DEV_T1_UART_MASK || val2 & DEV_T2_UART_MASK) {
+	} else if (val2 & DEV_T2_UART_MASK) {
 		uart_sm5502_connecting = 1;
 		muic_update_jig_state(usbsw, val2, vbus);
 #if defined(CONFIG_MUIC_SUPPORT_RUSTPROOF)
 		if (usbsw->is_rustproof) {
 			pr_info("[MUIC] RustProof mode, close UART Path\n");
 			muic_rustproof_feature(client, SM5502_ATTACHED);
+			if (vbus & DEV_VBUSIN_VALID)
+				pdata->callback(CABLE_TYPE_JIG_UART_OFF_VB, SM5502_ATTACHED);
+			else
+				pdata->callback(CABLE_TYPE_UARTOFF, SM5502_ATTACHED);
 		} else
 #endif
 		{
@@ -1263,12 +1270,15 @@ static int sm5502_detach_dev(struct sm5502_usbsw *usbsw)
 		pdata->callback(CABLE_TYPE_CDP, SM5502_DETACHED);
 
 	/* UART */
-	} else if (usbsw->dev1 & DEV_T1_UART_MASK ||
-			usbsw->dev2 & DEV_T2_UART_MASK) {
+	} else if (usbsw->dev2 & DEV_T2_UART_MASK) {
 #if defined(CONFIG_MUIC_SUPPORT_RUSTPROOF)
 		if (usbsw->is_rustproof) {
 			pr_info("[MUIC] RustProof mode Disconnected Event\n");
 			muic_rustproof_feature(usbsw->client, SM5502_DETACHED);
+			if (usbsw->vbus & DEV_VBUSIN_VALID)
+				pdata->callback(CABLE_TYPE_JIG_UART_OFF_VB, SM5502_DETACHED);
+			else
+				pdata->callback(CABLE_TYPE_UARTOFF, SM5502_DETACHED);
 		} else
 #endif
 		{

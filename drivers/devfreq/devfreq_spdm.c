@@ -1,5 +1,5 @@
 /*
-*Copyright (c) 2014, The Linux Foundation. All rights reserved.
+*Copyright (c) 2014-2015, The Linux Foundation. All rights reserved.
 *
 *This program is free software; you can redistribute it and/or modify
 *it under the terms of the GNU General Public License version 2 and
@@ -26,7 +26,17 @@
 #include "governor.h"
 #include "devfreq_spdm.h"
 
+static void *spdm_ipc_log_ctxt;
 #define DEVFREQ_SPDM_DEFAULT_WINDOW_MS 100
+#define SPDM_IPC_LOG_PAGES	5
+
+#define SPDM_IPC_LOG(x...)	do { \
+	pr_debug(x); \
+	if (spdm_ipc_log_ctxt) \
+		ipc_log_string(spdm_ipc_log_ctxt, x); \
+} while (0)
+
+#define COPY_SIZE(x, y) ((x) <= (y) ? (x) : (y))
 
 static int change_bw(struct device *dev, unsigned long *freq, u32 flags)
 {
@@ -193,6 +203,7 @@ static int populate_config_data(struct spdm_data *data,
 					 data->config_data.num_ports);
 	if (ret) {
 		devm_kfree(&pdev->dev, data->config_data.ports);
+		data->config_data.ports = NULL;
 		return ret;
 	}
 
@@ -276,13 +287,15 @@ static int probe(struct platform_device *pdev)
 	    devfreq_add_device(&pdev->dev, data->profile, "spdm_bw_hyp", data);
 	if (IS_ERR(data->devfreq)) {
 		ret = PTR_ERR(data->devfreq);
-		goto no_profile;
+		goto no_spdm_device;
 	}
 
 	spdm_init_debugfs(&pdev->dev);
 
 	return 0;
 
+no_spdm_device:
+	devm_kfree(&pdev->dev, data->profile);
 no_profile:
 no_clock:
 	msm_bus_scale_unregister_client(data->bus_scale_client_id);
@@ -290,6 +303,7 @@ no_bus_scaling:
 	devm_kfree(&pdev->dev, data->config_data.ports);
 bad_of:
 	devm_kfree(&pdev->dev, data);
+	platform_set_drvdata(pdev, NULL);
 	return ret;
 }
 
@@ -314,7 +328,11 @@ static int remove(struct platform_device *pdev)
 		devm_kfree(&pdev->dev, data->config_data.ports);
 
 	devm_kfree(&pdev->dev, data);
-
+	platform_set_drvdata(pdev, NULL);
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	if (spdm_ipc_log_ctxt)
+		ipc_log_context_destroy(spdm_ipc_log_ctxt);
+#endif
 	return 0;
 }
 
