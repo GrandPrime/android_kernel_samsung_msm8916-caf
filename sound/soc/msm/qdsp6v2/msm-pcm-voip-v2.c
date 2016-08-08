@@ -503,7 +503,11 @@ static void voip_process_ul_pkt(uint8_t *voc_pkt,
 		snd_pcm_period_elapsed(prtd->capture_substream);
 	} else {
 		spin_unlock_irqrestore(&prtd->dsp_ul_lock, dsp_flags);
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+		pr_err("UL data dropped\n");
+#else
 		pr_debug("UL data dropped\n");
+#endif
 	}
 
 	wake_up(&prtd->out_wait);

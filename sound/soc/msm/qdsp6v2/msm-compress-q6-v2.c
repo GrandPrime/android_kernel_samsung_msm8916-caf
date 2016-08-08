@@ -1353,12 +1353,16 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 		prtd->last_buffer = 0;
 		prtd->cmd_ack = 0;
 		if (!prtd->gapless_state.gapless_transition) {
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+			pr_debug("issue CMD_FLUSH stream_id %d\n", stream_id);
+#else
 			spin_unlock_irqrestore(&prtd->lock, flags);
 			pr_debug("%s:[SNDRV_PCM_TRIGGER_STOP]issue CMD_PAUSE stream_id %d",__func__, ac->stream_id);
 			q6asm_stream_cmd_nowait(ac, CMD_PAUSE, ac->stream_id);
 			prtd->cmd_ack = 0;
 			spin_lock_irqsave(&prtd->lock, flags);
 			pr_debug("%s:[SNDRV_PCM_TRIGGER_STOP]issue CMD_FLUSH stream_id %d\n",__func__, ac->stream_id);
+#endif
 			spin_unlock_irqrestore(&prtd->lock, flags);
 			q6asm_stream_cmd(
 				prtd->audio_client, CMD_FLUSH, stream_id);

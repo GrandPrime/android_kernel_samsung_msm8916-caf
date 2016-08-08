@@ -90,7 +90,11 @@ static int snd_hrtimer_start(struct snd_timer *t)
 	struct snd_hrtimer *stime = t->private_data;
 
 	atomic_set(&stime->running, 0);
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	hrtimer_try_to_cancel(&stime->hrt);
+#else
+	hrtimer_cancel(&stime->hrt);
+#endif
 	hrtimer_start(&stime->hrt, ns_to_ktime(t->sticks * resolution),
 		      HRTIMER_MODE_REL);
 	atomic_set(&stime->running, 1);
@@ -101,7 +105,9 @@ static int snd_hrtimer_stop(struct snd_timer *t)
 {
 	struct snd_hrtimer *stime = t->private_data;
 	atomic_set(&stime->running, 0);
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	hrtimer_try_to_cancel(&stime->hrt);
+#endif
 	return 0;
 }
 

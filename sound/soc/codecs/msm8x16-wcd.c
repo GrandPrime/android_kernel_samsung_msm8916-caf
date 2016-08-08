@@ -2337,7 +2337,7 @@ static int msm8x16_wcd_codec_enable_dig_clk(struct snd_soc_dapm_widget *w,
 		snd_soc_update_bits(codec, w->reg, 0x80, 0x80);
 #ifndef CONFIG_SEC_GT510_PROJECT
 		msm8x16_wcd_boost_mode_sequence(codec, SPK_PMU);
-#endif /* CONFIG_SEC_GT510_PROJECT */
+#endif /* not CONFIG_SEC_GT510_PROJECT */
 		break;
 	case SND_SOC_DAPM_POST_PMD:
 		if (msm8x16_wcd->rx_bias_count == 0)
@@ -2751,8 +2751,10 @@ static int msm8x16_wcd_codec_enable_dec(struct snd_soc_dapm_widget *w,
 		/* Enableable TX digital mute */
 		snd_soc_update_bits(codec, tx_vol_ctl_reg, 0x01, 0x01);
 		for (i = 0; i < NUM_DECIMATORS; i++) {
-			if (decimator == i + 1)
+			if (decimator == i + 1) {
 				msm8x16_wcd->dec_active[i] = true;
+				pr_info("%s:++++++++++++msm8x16_wcd->dec_active[%d]=%d++++++ \n", __func__,i,msm8x16_wcd->dec_active[i]);
+			}
 		}
 
 		dec_hpf_cut_of_freq = snd_soc_read(codec, tx_mux_ctl_reg);
@@ -2811,8 +2813,10 @@ static int msm8x16_wcd_codec_enable_dec(struct snd_soc_dapm_widget *w,
 			(tx_hpf_work[decimator - 1].tx_hpf_cut_of_freq) << 4);
 		snd_soc_update_bits(codec, tx_vol_ctl_reg, 0x01, 0x00);
 		for (i = 0; i < NUM_DECIMATORS; i++) {
-			if (decimator == i + 1)
+			if (decimator == i + 1) {
 				msm8x16_wcd->dec_active[i] = false;
+				pr_info("%s:++++++++++++msm8x16_wcd->dec_active[%d]=%d++++++ \n", __func__,i,msm8x16_wcd->dec_active[i]);
+			}
 		}
 		break;
 	}
@@ -3364,8 +3368,7 @@ static int msm8x16_wcd_codec_enable_clock_block(struct snd_soc_codec *codec,
 		snd_soc_update_bits(codec,
 			MSM8X16_WCD_A_DIGITAL_CDC_TOP_CLK_CTL, 0x0C, 0x00);
 		snd_soc_update_bits(codec,
-				MSM8X16_WCD_A_CDC_CLK_PDM_CTL, 0x03, 0x00);
-
+			MSM8X16_WCD_A_CDC_CLK_PDM_CTL, 0x03, 0x00);
 	}
 	return 0;
 }
@@ -3546,17 +3549,17 @@ int msm8x16_wcd_digital_mute(struct snd_soc_dai *dai, int mute)
 	u8 decimator = 0, i;
 	struct msm8x16_wcd_priv *msm8x16_wcd;
 
-	pr_debug("%s: Digital Mute val = %d\n", __func__, mute);
+	pr_info("%s: Digital Mute val = %d\n", __func__, mute);
 
 	if (!dai || !dai->codec) {
-		pr_err("%s: Invalid params\n", __func__);
+		pr_info("%s: Invalid params\n", __func__);
 		return -EINVAL;
 	}
 	codec = dai->codec;
 	msm8x16_wcd = snd_soc_codec_get_drvdata(codec);
 
 	if (dai->id != AIF1_CAP) {
-		dev_dbg(codec->dev, "%s: Not capture use case skip\n",
+		dev_info(codec->dev, "%s: Not capture use case skip\n",
 		__func__);
 		return 0;
 	}
@@ -3572,16 +3575,18 @@ int msm8x16_wcd_digital_mute(struct snd_soc_dai *dai, int mute)
 	}
 
 	for (i = 0; i < NUM_DECIMATORS; i++) {
+		pr_info("%s:++++++++++++msm8x16_wcd->dec_active[%d]=%d++++++ \n", __func__,i,msm8x16_wcd->dec_active[i]);
 		if (msm8x16_wcd->dec_active[i])
 			decimator = i + 1;
 		if (decimator && decimator <= NUM_DECIMATORS) {
-			pr_debug("%s: Mute = %d Decimator = %d", __func__,
+			pr_info("%s: Mute = %d Decimator = %d", __func__,
 					mute, decimator);
 			tx_vol_ctl_reg = MSM8X16_WCD_A_CDC_TX1_VOL_CTL_CFG +
 				32 * (decimator - 1);
 			snd_soc_update_bits(codec, tx_vol_ctl_reg, 0x01, mute);
 		}
 		decimator = 0;
+		pr_info("%s:--------------------------- i = %d\n", __func__, i);
 	}
 	return 0;
 }
@@ -4158,16 +4163,18 @@ static int msm8x16_wcd_device_down(struct snd_soc_codec *codec)
 
 static int msm8x16_wcd_device_up(struct snd_soc_codec *codec)
 {
-
+#ifndef CONFIG_SAMSUNG_JACK
 	struct msm8x16_wcd_priv *msm8x16_wcd_priv =
 		snd_soc_codec_get_drvdata(codec);
-
+#endif /* not CONFIG_SAMSUNG_JACK */
 	u32 reg;
 	dev_dbg(codec->dev, "%s: device up!\n", __func__);
 
 	mutex_lock(&codec->mutex);
 
+#ifndef CONFIG_SAMSUNG_JACK
 	clear_bit(BUS_DOWN, &msm8x16_wcd_priv->status_mask);
+#endif /* not CONFIG_SAMSUNG_JACK */
 
 	for (reg = 0; reg < ARRAY_SIZE(msm8x16_wcd_reset_reg_defaults); reg++)
 		if (msm8x16_wcd_reg_readable[reg])

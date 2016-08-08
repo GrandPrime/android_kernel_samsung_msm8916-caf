@@ -2243,6 +2243,9 @@ int snd_usbmidi_create(struct snd_card *card,
 	else
 		err = snd_usbmidi_create_endpoints(umidi, endpoints);
 	if (err < 0) {
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+		snd_usbmidi_free(umidi);
+#endif
 		return err;
 	}
 

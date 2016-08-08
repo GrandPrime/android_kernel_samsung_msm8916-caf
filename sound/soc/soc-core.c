@@ -2309,7 +2309,7 @@ static int snd_soc_add_controls(struct snd_card *card, struct device *dev,
 
 	return 0;
 }
-
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 struct snd_kcontrol *snd_soc_card_get_kcontrol(struct snd_soc_card *soc_card,
 					       const char *name)
 {
@@ -2325,6 +2325,7 @@ struct snd_kcontrol *snd_soc_card_get_kcontrol(struct snd_soc_card *soc_card,
 	return NULL;
 }
 EXPORT_SYMBOL_GPL(snd_soc_card_get_kcontrol);
+#endif
 
 /**
  * snd_soc_add_codec_controls - add an array of controls to a codec.
@@ -3195,6 +3196,7 @@ out:
 }
 EXPORT_SYMBOL_GPL(snd_soc_bytes_put);
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 int snd_soc_bytes_info_ext(struct snd_kcontrol *kcontrol,
 			struct snd_ctl_elem_info *ucontrol)
 {
@@ -3206,6 +3208,7 @@ int snd_soc_bytes_info_ext(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 EXPORT_SYMBOL_GPL(snd_soc_bytes_info_ext);
+#endif
 
 /**
  * snd_soc_info_xr_sx - signed multi register info callback

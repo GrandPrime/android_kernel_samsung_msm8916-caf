@@ -837,10 +837,18 @@ static int msm_btsco_rate_put(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
 	switch (ucontrol->value.integer.value[0]) {
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	case 8000:
+#else
 	case 0:
+#endif
 		msm_btsco_rate = BTSCO_RATE_8KHZ;
 		break;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	case 16000:
+#else
 	case 1:
+#endif
 		msm_btsco_rate = BTSCO_RATE_16KHZ;
 		break;
 	default:

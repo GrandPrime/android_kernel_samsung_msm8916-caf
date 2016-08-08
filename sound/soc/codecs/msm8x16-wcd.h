@@ -177,7 +177,7 @@ struct msm8916_asoc_mach_data {
 	void __iomem *vaddr_gpio_mux_spkr_ctl;
 	void __iomem *vaddr_gpio_mux_mic_ctl;
 };
-#endif /* CONFIG_SND_SOC_MSM8X16_WM1814 */
+#endif /* not CONFIG_SND_SOC_MSM8X16_WM1814 */
 
 struct msm8x16_wcd_pdata {
 	int irq;

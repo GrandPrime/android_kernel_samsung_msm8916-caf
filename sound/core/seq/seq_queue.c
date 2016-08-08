@@ -144,11 +144,13 @@ static struct snd_seq_queue *queue_new(int owner, int locked)
 static void queue_delete(struct snd_seq_queue *q)
 {
 	/* stop and release the timer */
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	mutex_lock(&q->timer_mutex);
-	snd_seq_timer_stop(q->timer);
+#endif	snd_seq_timer_stop(q->timer);
 	snd_seq_timer_close(q);
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	mutex_unlock(&q->timer_mutex);
-	/* wait until access free */
+#endif	/* wait until access free */
 	snd_use_lock_sync(&q->use_lock);
 	/* release resources... */
 	snd_seq_prioq_delete(&q->tickq);

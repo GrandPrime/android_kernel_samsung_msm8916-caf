@@ -73,7 +73,11 @@ struct snd_timer_user {
 	struct timespec tstamp;		/* trigger tstamp */
 	wait_queue_head_t qchange_sleep;
 	struct fasync_struct *fasync;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	struct mutex ioctl_lock;
+#else
+	struct mutex tread_sem;
+#endif
 };
 
 /* list of timers */
@@ -693,7 +697,11 @@ void snd_timer_interrupt(struct snd_timer * timer, unsigned long ticks_left)
 		} else {
 			ti->flags &= ~SNDRV_TIMER_IFLG_RUNNING;
 			if (--timer->running)
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 				list_del_init(&ti->active_list);
+#else
+				list_del(&ti->active_list);
+#endif
 		}
 		if ((timer->hw.flags & SNDRV_TIMER_HW_TASKLET) ||
 		    (ti->flags & SNDRV_TIMER_IFLG_FAST))
@@ -1256,7 +1264,11 @@ static int snd_timer_user_open(struct inode *inode, struct file *file)
 		return -ENOMEM;
 	spin_lock_init(&tu->qlock);
 	init_waitqueue_head(&tu->qchange_sleep);
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	mutex_init(&tu->ioctl_lock);
+#else
+	mutex_init(&tu->tread_sem);
+#endif
 	tu->ticks = 1;
 	tu->queue_size = 128;
 	tu->queue = kmalloc(tu->queue_size * sizeof(struct snd_timer_read),
@@ -1276,10 +1288,14 @@ static int snd_timer_user_release(struct inode *inode, struct file *file)
 	if (file->private_data) {
 		tu = file->private_data;
 		file->private_data = NULL;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 		mutex_lock(&tu->ioctl_lock);
+#endif
 		if (tu->timeri)
 			snd_timer_close(tu->timeri);
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 		mutex_unlock(&tu->ioctl_lock);
+#endif
 		kfree(tu->queue);
 		kfree(tu->tqueue);
 		kfree(tu);
@@ -1517,6 +1533,7 @@ static int snd_timer_user_tselect(struct file *file,
 	int err = 0;
 
 	tu = file->private_data;
+	mutex_lock(&tu->tread_sem);
 	if (tu->timeri) {
 		snd_timer_close(tu->timeri);
 		tu->timeri = NULL;
@@ -1560,6 +1577,7 @@ static int snd_timer_user_tselect(struct file *file,
 	}
 
       __err:
+      	mutex_unlock(&tu->tread_sem);
 	return err;
 }
 
@@ -1772,7 +1790,7 @@ enum {
 	SNDRV_TIMER_IOCTL_PAUSE_OLD = _IO('T', 0x23),
 };
 
-static long __snd_timer_user_ioctl(struct file *file, unsigned int cmd,
+static long snd_timer_user_ioctl(struct file *file, unsigned int cmd,
 				 unsigned long arg)
 {
 	struct snd_timer_user *tu;
@@ -1789,11 +1807,17 @@ static long __snd_timer_user_ioctl(struct file *file, unsigned int cmd,
 	{
 		int xarg;
 
-		if (tu->timeri)
+		mutex_lock(&tu->tread_sem);
+		if (tu->timeri)	{	/* too late */
+			mutex_unlock(&tu->tread_sem);
 			return -EBUSY;
-		if (get_user(xarg, p))
+		}
+		if (get_user(xarg, p)) {
+			mutex_unlock(&tu->tread_sem);
 			return -EFAULT;
+		}
 		tu->tread = xarg ? 1 : 0;
+		mutex_unlock(&tu->tread_sem);
 		return 0;
 	}
 	case SNDRV_TIMER_IOCTL_GINFO:
@@ -1824,18 +1848,6 @@ static long __snd_timer_user_ioctl(struct file *file, unsigned int cmd,
 		return snd_timer_user_pause(file);
 	}
 	return -ENOTTY;
-}
-
-static long snd_timer_user_ioctl(struct file *file, unsigned int cmd,
-				 unsigned long arg)
-{
-	struct snd_timer_user *tu = file->private_data;
-	long ret;
-
-	mutex_lock(&tu->ioctl_lock);
-	ret = __snd_timer_user_ioctl(file, cmd, arg);
-	mutex_unlock(&tu->ioctl_lock);
-	return ret;
 }
 
 static int snd_timer_user_fasync(int fd, struct file * file, int on)
