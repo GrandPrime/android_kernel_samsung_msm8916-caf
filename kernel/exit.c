@@ -731,8 +731,13 @@ void do_exit(long code)
 
 	if (unlikely(in_interrupt()))
 		panic("Aiee, killing interrupt handler!");
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	if (unlikely(!tsk->pid))
+		panic("Attempted to kill the idle task!");
+#else
 	if (unlikely(!tsk->pid) || unlikely(tsk->pid==1))
 		panic("Attempted to kill the idle task! or init task");
+#endif
 
 	/*
 	 * If do_exit is called because this processes oopsed, it's possible

@@ -53,6 +53,8 @@
 #include <linux/proc_fs.h>
 #endif
 
+
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/printk.h>
 
@@ -239,6 +241,7 @@ struct log {
 static DEFINE_RAW_SPINLOCK(logbuf_lock);
 
 #ifdef CONFIG_PRINTK
+
 #ifdef CONFIG_SEC_DEBUG
 static void sec_log_add(const struct log *msg);
 #endif
@@ -756,7 +759,11 @@ static ssize_t devkmsg_read(struct file *file, char __user *buf,
 		 ((user->prev & LOG_CONT) && !(msg->flags & LOG_PREFIX)))
 		cont = '+';
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	len = snprintf(user->buf, __LOG_BUF_LEN, "%u,%llu,%llu,%c;",
+#else
 	len = sprintf(user->buf, "%u,%llu,%llu,%c;",
+#endif
 		      (msg->facility << 3) | msg->level,
 		      user->seq, ts_usec, cont);
 	user->prev = msg->flags;
@@ -1228,8 +1235,12 @@ static int syslog_oops_buf_print(char __user *buf, int size, char *text)
 	int len = 0;
 
 	raw_spin_lock_irq(&logbuf_lock);
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	if (syslog_seq < log_oops_first_seq) {
+#else
 	if (log_oops_first_seq != ULLONG_MAX &&
 	    syslog_seq < log_oops_first_seq) {
+#endif
 		syslog_seq = log_oops_first_seq;
 		syslog_oops_buf_idx = 0;
 	}
@@ -2089,7 +2100,8 @@ static void sec_log_add_on_bootup(void)
 	}
 }
 
-#ifdef CONFIG_SEC_DEBUG_SUBSYS
+/* This is temporarily disabled until we get support from Bootloader */
+#ifdef CONFIG_SEC_DEBUG_SUBSYS && defined(CONFIG_SEC_FORTUNA_PROJECT)
 void sec_debug_subsys_set_kloginfo(unsigned int *first_idx_paddr,
 	unsigned int *next_idx_paddr, unsigned int *log_paddr,
 	unsigned int *size)
@@ -2205,7 +2217,7 @@ static int __init printk_remap_nocache(void)
 
 	raw_spin_lock_irqsave(&logbuf_lock, flags);
 	/*We have to save logs printed prior to
-	  the sec log initialization here.*/
+	the sec log initialization here.*/
 	sec_log_add_on_bootup();
 	raw_spin_unlock_irqrestore(&logbuf_lock, flags);
 #if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP) && defined(CONFIG_SEC_LOG_LAST_KMSG)

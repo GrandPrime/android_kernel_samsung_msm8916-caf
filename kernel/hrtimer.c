@@ -866,7 +866,9 @@ u64 hrtimer_forward(struct hrtimer *timer, ktime_t now, ktime_t interval)
 	u64 orun = 1;
 	ktime_t delta;
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	WARN_ON(hrtimer_is_queued(timer));
+#endif
 
 	delta = ktime_sub(now, hrtimer_get_expires(timer));
 

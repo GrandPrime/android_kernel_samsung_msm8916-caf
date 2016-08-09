@@ -188,7 +188,9 @@ void audit_panic(const char *message)
 	case AUDIT_FAIL_SILENT:
 		break;
 	case AUDIT_FAIL_PRINTK:
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 		if (printk_ratelimit())
+#endif
 			printk(KERN_ERR "audit: %s\n", message);
 		break;
 	case AUDIT_FAIL_PANIC:
@@ -259,7 +261,9 @@ void audit_log_lost(const char *message)
 	}
 
 	if (print) {
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 		if (printk_ratelimit())
+#endif
 			printk(KERN_WARNING
 				"audit: audit_lost=%d audit_rate_limit=%d "
 				"audit_backlog_limit=%d\n",
@@ -1141,7 +1145,11 @@ struct audit_buffer *audit_log_start(struct audit_context *ctx, gfp_t gfp_mask,
 				continue;
 			}
 		}
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 		if (audit_rate_check() && printk_ratelimit())
+#else
+		if (audit_rate_check())
+#endif
 			printk(KERN_WARNING
 			       "audit: audit_backlog=%d > "
 			       "audit_backlog_limit=%d\n",
