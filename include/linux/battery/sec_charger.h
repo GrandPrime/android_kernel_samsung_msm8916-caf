@@ -57,6 +57,10 @@
 #include <linux/battery/charger/max77823_charger.h>
 #elif defined(CONFIG_CHARGER_RT5033)
 #include <linux/battery/charger/rt5033_charger.h>
+#elif defined(CONFIG_CHARGER_SM5703)
+#include <linux/battery/charger/sm5703_charger.h>
+#elif defined(CONFIG_CHARGER_SM5418)
+#include <linux/battery/charger/sm5418_charger.h>
 #endif
 
 #if defined(CONFIG_CHARGER_BQ24260)
@@ -71,6 +75,9 @@ struct sec_charger_info {
 
 	int cable_type;
 	int status;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	int siop_level;
+#endif
 	bool is_charging;
 
 	/* charging current : + charging, - OTG */
@@ -81,6 +88,10 @@ struct sec_charger_info {
 	int reg_addr;
 	int reg_data;
 	int irq_base;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	bool is_slow_charging;
+	struct delayed_work slow_work;
+#endif
 };
 
 bool sec_hal_chg_init(struct i2c_client *);

@@ -10,10 +10,12 @@
 #include <linux/rwsem.h>
 #include <linux/memcontrol.h>
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 extern int isolate_lru_page(struct page *page);
 extern void putback_lru_page(struct page *page);
 extern unsigned long reclaim_pages_from_list(struct list_head *page_list,
 					     struct vm_area_struct *vma);
+#endif
 
 /*
  * The anon_vma heads a list of private "related" vmas, to scan if
@@ -193,8 +195,12 @@ int page_referenced_one(struct page *, struct vm_area_struct *,
 
 #define TTU_ACTION(x) ((x) & TTU_ACTION_MASK)
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+int try_to_unmap(struct page *, enum ttu_flags flags);
+#else
 int try_to_unmap(struct page *, enum ttu_flags flags,
 			struct vm_area_struct *vma);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 int try_to_unmap_one(struct page *, struct vm_area_struct *,
 			unsigned long address, enum ttu_flags flags);
 
@@ -261,7 +267,11 @@ static inline int page_referenced(struct page *page, int is_locked,
 	return 0;
 }
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+#define try_to_unmap(page, refs) SWAP_FAIL
+#else
 #define try_to_unmap(page, refs, vma) SWAP_FAIL
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 
 static inline int page_mkclean(struct page *page)
 {

@@ -28,6 +28,10 @@
 
 #define THROTTLE_ON	0
 #define THROTTLE_OFF	1
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+#define THROTTLE_REG	2
+
 #define THROTTLE_OVERRIDE_OFF 2
+#endif
 
 #endif

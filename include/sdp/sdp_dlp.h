@@ -17,16 +17,10 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef _LINUX_DEK_AES_H
-#define _LINUX_DEK_AES_H
+#ifndef _SDP_DLP_H
+#define _SDP_DLP_H
 
-#include <linux/kernel.h>
-#include <linux/types.h>
-#include <linux/crypto.h>
-#include <linux/scatterlist.h>
-#include <sdp/dek_aes.h>
+bool dlp_is_locked(int user_id);
+int dlp_isInterestedFile(int user_id, const char *filename);
 
-int dek_aes_encrypt(kek_t *kek, char *src, char *dst, int len);
-int dek_aes_decrypt(kek_t *kek, char *src, char *dst, int len);
-
-#endif
+#endif /* _SDP_DLP_H */

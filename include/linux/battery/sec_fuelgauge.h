@@ -108,7 +108,11 @@ ssize_t sec_fg_store_attrs(struct device *dev,
 				const char *buf, size_t count);
 
 #ifdef CONFIG_OF
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+extern void board_fuelgauge_init(struct sec_fuelgauge_info *fuelgauge);
+#else
 extern void board_fuelgauge_init(void *fuelgauge);
+#endif
 extern bool sec_bat_check_jig_status(void);
 #endif
 

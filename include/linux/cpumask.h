@@ -298,7 +298,7 @@ static inline void cpumask_little(struct cpumask *dstp)
 
 #define cpu_mask_little(dstp)\
 	cpumask_little(dstp)
-#else
+#elif !defined(CONFIG_SEC_FORTUNA_PROJECT)
 
 #define get_low_pwr_cpu1() ( WORK_CPU_UNBOUND )
 

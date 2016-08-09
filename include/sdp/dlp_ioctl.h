@@ -17,16 +17,28 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef _LINUX_DEK_AES_H
-#define _LINUX_DEK_AES_H
+#ifndef DLP_IOCTL_H_
+#define DLP_IOCTL_H_
 
-#include <linux/kernel.h>
 #include <linux/types.h>
-#include <linux/crypto.h>
-#include <linux/scatterlist.h>
-#include <sdp/dek_aes.h>
+#include <linux/ioctl.h>
 
-int dek_aes_encrypt(kek_t *kek, char *src, char *dst, int len);
-int dek_aes_decrypt(kek_t *kek, char *src, char *dst, int len);
+#define DLP_DEV_PATH	"/dev/sdp_dlp"
 
-#endif
+#define __DLPIOC		0x78
+#define MAX_EXT_LENGTH 1000 
+
+typedef struct _dlp_lock_set {
+	int user_id;
+} dlp_lock_set;
+
+typedef struct _dlp_extension_set {
+	int user_id;
+	char extensions[MAX_EXT_LENGTH+1];
+} dlp_extension_set;
+
+#define DLP_LOCK_ENABLE		_IOW(__DLPIOC, 1, dlp_lock_set)
+#define DLP_LOCK_DISABLE	_IOW(__DLPIOC, 2, dlp_lock_set)
+#define DLP_EXTENSION_SET	_IOW(__DLPIOC, 3, dlp_extension_set)
+
+#endif /* DLP_IOCTL_H_ */

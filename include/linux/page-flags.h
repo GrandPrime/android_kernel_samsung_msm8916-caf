@@ -114,9 +114,6 @@ enum pageflags {
 	PG_nocache,
 #endif
 	PG_readahead,		/* page in a readahead window */
-#ifdef CONFIG_SDP
-	PG_sensitive,
-#endif
 	__NR_PAGEFLAGS,
 
 	/* Filesystems */

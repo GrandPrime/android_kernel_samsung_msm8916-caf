@@ -440,6 +440,9 @@ struct sec_battery_platform_data {
 	bool use_LED;				/* use charging LED */
 
 	bool event_check;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	unsigned int chg_high_temp;
+#endif
 	/* flag for skipping the swelling mode */
 	bool swelling_mode_skip_in_high_temp;
 	/* sustaining event after deactivated (second) */
@@ -584,6 +587,7 @@ struct sec_battery_platform_data {
 	 */
 	int capacity_max;
 	int capacity_max_hv;
+
 	int capacity_max_margin;
 	int capacity_min;
 	int rcomp0;
@@ -607,8 +611,10 @@ struct sec_battery_platform_data {
 	/* float voltage (mV) */
 	int chg_float_voltage;
 	sec_charger_functions_t chg_functions_setting;
-
-	bool always_enable;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	int siop_level;
+	bool siop_activated;
+#endif	bool always_enable;
 
 	/* ADC setting */
 	unsigned int adc_check_count;

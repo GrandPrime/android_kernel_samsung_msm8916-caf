@@ -28,6 +28,12 @@
 #include <linux/sysfs.h>
 
 #define EXTCON_DEV_NAME			"extcon-muic"
+
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+#define SUPPORTED_CABLE_MAX	32
+#define CABLE_NAME_MAX		30
+#endif
+
 /*
  * The standard cable name is to help support general notifier
  * and notifiee device drivers to share the common names.
@@ -49,18 +55,42 @@
 enum extcon_cable_name {
 	EXTCON_USB = 0,
 	EXTCON_USB_HOST,
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	EXTCON_USB_HOST_5V,
 	EXTCON_HV_PREPARE,
+#endif
 	EXTCON_TA,			/* Travel Adaptor */
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	EXTCON_FAST_CHARGER,
+	EXTCON_SLOW_CHARGER,
+#else
 	EXTCON_HV_TA,			/* High Voltage Charger(9V) */
 	EXTCON_HV_TA_ERR,		/* Out of range HV Charger(5~9V) */
 	EXTCON_UNDEFINED_CHARGER,
 	EXTCON_CEA936_CHG,	/* CEA936 A/B USB cable, Only for charging. */
+#endif
 	EXTCON_CHARGE_DOWNSTREAM, /* Charging an external device */
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	EXTCON_HDMI,
+#endif
 #if defined (CONFIG_MUIC_DET_JACK)
 	EXTCON_EARJACK,
 #endif
 	EXTCON_MHL,
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	EXTCON_DVI,
+	EXTCON_VGA,
+	EXTCON_DOCK,
+	EXTCON_LINE_IN,
+	EXTCON_LINE_OUT,
+	EXTCON_MIC_IN,
+	EXTCON_HEADPHONE_OUT,
+	EXTCON_SPDIF_IN,
+	EXTCON_SPDIF_OUT,
+	EXTCON_VIDEO_IN,
+	EXTCON_VIDEO_OUT,
+	EXTCON_MECHANICAL,
+#else /* CONFIG_SEC_FORTUNA_PROJECT */
 	EXTCON_MHL_VB,
 	EXTCON_DESKDOCK,
 	EXTCON_DESKDOCK_VB,
@@ -85,13 +115,18 @@ enum extcon_cable_name {
 	EXTCON_LANHUB_TA,
 #endif
 	EXTCON_HV_TA_1A,			/* UNDEFINE but charging */
+	EXTCON_UNKNOWN,
 	EXTCON_NONE,
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 };
-
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+extern const char extcon_cable_name[][CABLE_NAME_MAX + 1];
+#else
 #define SUPPORTED_CABLE_MAX (EXTCON_NONE + 1)
 #define CABLE_NAME_MAX		SUPPORTED_CABLE_MAX
 
 extern const char *extcon_cable_name[CABLE_NAME_MAX + 1];
+#endif
 
 struct extcon_cable;
 
@@ -140,7 +175,9 @@ struct extcon_dev {
 	/* --- Optional callbacks to override class functions --- */
 	ssize_t	(*print_name)(struct extcon_dev *edev, char *buf);
 	ssize_t	(*print_state)(struct extcon_dev *edev, char *buf);
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	int (*get_cable_properties)(const char *cable_name, void *cable_props);
+#endif
 
 	/* --- Internal data. Please do not set. --- */
 	struct device	*dev;
@@ -345,6 +382,8 @@ static inline int extcon_unregister_interest(struct extcon_specific_cable_nb
 	return 0;
 }
 #endif /* CONFIG_EXTCON */
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 /* added sec common function */
 extern int get_jig_state(void);
+#endif
 #endif /* __LINUX_EXTCON_H__ */

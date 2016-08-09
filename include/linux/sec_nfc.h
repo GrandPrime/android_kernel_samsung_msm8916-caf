@@ -51,12 +51,21 @@
 
 /* gpio pin configuration */
 struct sec_nfc_platform_data {
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	unsigned int irq;
 	unsigned int ven;
 	unsigned int firm;
 	unsigned int wake;
 	unsigned int tvdd;
 	unsigned int avdd;
+#else
+	int irq;
+	int ven;
+	int firm;
+	int wake;
+	int tvdd;
+	int avdd;
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 #ifdef CONFIG_SEC_NFC_IO_EN
 	unsigned int pvdd;
 #endif
@@ -66,7 +75,6 @@ struct sec_nfc_platform_data {
 #ifdef CONFIG_SEC_NFC_USE_8916_RFCLK2
 	struct clk *clk_enable;
 #else
-
 	unsigned int clk_enable;
 #endif
 #endif

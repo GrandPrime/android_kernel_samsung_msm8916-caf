@@ -75,8 +75,13 @@ struct page *ksm_might_need_to_copy(struct page *page,
 
 int page_referenced_ksm(struct page *page,
 			struct mem_cgroup *memcg, unsigned long *vm_flags);
+// TODO: https://github.com/TheWhisp/android_kernel_samsung_msm8916-caf/commit/064d282a4500650dbcec175df6d592d99a4a31d6
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+int try_to_unmap_ksm(struct page *page, enum ttu_flags flags);
+#else
 int try_to_unmap_ksm(struct page *page,
 			enum ttu_flags flags, struct vm_area_struct *vma);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 int rmap_walk_ksm(struct page *page, int (*rmap_one)(struct page *,
 		  struct vm_area_struct *, unsigned long, void *), void *arg);
 void ksm_migrate_page(struct page *newpage, struct page *oldpage);
@@ -116,8 +121,12 @@ static inline int page_referenced_ksm(struct page *page,
 	return 0;
 }
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+static inline int try_to_unmap_ksm(struct page *page, enum ttu_flags flags)
+#else
 static inline int try_to_unmap_ksm(struct page *page,
 			enum ttu_flags flags, struct vm_area_struct *target_vma)
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 {
 	return 0;
 }

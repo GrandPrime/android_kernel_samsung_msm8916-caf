@@ -52,5 +52,7 @@ struct msm_spi_platform_data {
 	u32  bam_producer_pipe_index;
 	bool rt_priority;
 	bool use_pinctrl;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	bool is_shared;
+#endif
 };

@@ -20,6 +20,9 @@
 */
 
 #define SW_FLIP                 0x15  /* set = flip cover */
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+#define SW_COVER_ATTACH         0x1B    /* set = flip cover attach */
+#endif
 
 /*
  * In-kernel definitions.

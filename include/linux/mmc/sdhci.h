@@ -26,8 +26,26 @@ struct sdhci_next {
 
 enum sdhci_power_policy {
 	SDHCI_PERFORMANCE_MODE,
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	SDHCI_PERFORMANCE_MODE_INIT,
+#endif
 	SDHCI_POWER_SAVE_MODE,
 };
+
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+struct sdhci_host_qos {
+	unsigned int *cpu_dma_latency_us;
+	unsigned int cpu_dma_latency_tbl_sz;
+	struct pm_qos_request pm_qos_req_dma;
+};
+
+enum sdhci_host_qos_policy {
+	SDHCI_QOS_READ_WRITE,
+	SDHCI_QOS_READ,
+	SDHCI_QOS_WRITE,
+	SDHCI_QOS_MAX_POLICY,
+};
+#endif
 
 struct sdhci_host {
 	/* Data set by hardware interface driver */
@@ -162,7 +180,6 @@ struct sdhci_host {
  * calculated based on the base clock.
  */
 #define SDHCI_QUIRK2_DIVIDE_TOUT_BY_4 (1 << 11)
-
 /*
  * Some SDHC controllers are unable to handle data-end bit error in
  * 1-bit mode of SDIO.
@@ -174,6 +191,13 @@ struct sdhci_host {
  * the bounce buffer logic when preparing data
  */
 #define SDHCI_QUIRK2_ADMA_SKIP_DATA_ALIGNMENT             (1<<13)
+
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+/* Some controllers doesn't have have any LED control */
+#define SDHCI_QUIRK2_BROKEN_LED_CONTROL	(1 << 14)
+#endif
+/* Use reset workaround in case sdhci reset timeouts */
+#define SDHCI_QUIRK2_USE_RESET_WORKAROUND (1 << 15)
 
 	int irq;		/* Device IRQ */
 	void __iomem *ioaddr;	/* Mapped address */
@@ -263,10 +287,20 @@ struct sdhci_host {
 #define SDHCI_TUNING_MODE_1	0
 	struct timer_list	tuning_timer;	/* Timer for tuning */
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	unsigned int cpu_dma_latency_us;
 	struct pm_qos_request pm_qos_req_dma;
+#else
+	struct sdhci_host_qos host_qos[SDHCI_QOS_MAX_POLICY];
+	enum sdhci_host_qos_policy last_qos_policy;
+
+	bool host_use_default_qos;
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	unsigned int pm_qos_timeout_us;         /* timeout for PM QoS request */
 	struct device_attribute pm_qos_tout;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	struct delayed_work pm_qos_work;
+#endif
 
 	struct sdhci_next next_data;
 	ktime_t data_start_time;
@@ -277,8 +311,14 @@ struct sdhci_host {
 	bool async_int_supp;  /* async support to rxv int, when clks are off */
 	bool disable_sdio_irq_deferred; /* status of disabling sdio irq */
 	u32 auto_cmd_err_sts;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	u32 hc_pwrctrl_reg;
+#endif
 	struct ratelimit_state dbg_dump_rs;
+	int reset_wa_applied; /* reset workaround status */
+	ktime_t reset_wa_t; /* time when the reset workaround is applied */
+	int reset_wa_cnt; /* total number of times workaround is used */
+
 	unsigned long private[0] ____cacheline_aligned;
 };
 #endif /* LINUX_MMC_SDHCI_H */
