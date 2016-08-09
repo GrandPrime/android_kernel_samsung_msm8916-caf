@@ -2262,7 +2262,9 @@ static ssize_t sleep_millisecs_store(struct kobject *kobj,
 	if (err || msecs > UINT_MAX)
 		return -EINVAL;
 
+#ifndef CONFIG_ADAPTIVE_KSM
 	ksm_thread_sleep_millisecs = msecs;
+#endif
 
 	return count;
 }
@@ -2285,7 +2287,9 @@ static ssize_t pages_to_scan_store(struct kobject *kobj,
 	if (err || nr_pages > UINT_MAX)
 		return -EINVAL;
 
+#ifndef CONFIG_ADAPTIVE_KSM
 	ksm_thread_pages_to_scan = nr_pages;
+#endif
 
 	return count;
 }

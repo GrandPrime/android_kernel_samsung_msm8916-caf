@@ -1476,11 +1476,13 @@ static int try_to_unmap_anon(struct page *page, enum ttu_flags flags,
 	struct anon_vma *anon_vma;
 	pgoff_t pgoff;
 	struct anon_vma_chain *avc;
-
+	
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	if (target_vma) {
 		address = vma_address(page, target_vma);
 		return try_to_unmap_one(page, target_vma, address, flags);
 	}
+#endif
 
 	anon_vma = page_lock_anon_vma_read(page);
 	if (!anon_vma)
