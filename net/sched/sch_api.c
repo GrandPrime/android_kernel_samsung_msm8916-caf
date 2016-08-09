@@ -1024,7 +1024,11 @@ static int tc_get_qdisc(struct sk_buff *skb, struct nlmsghdr *n)
 	struct Qdisc *p = NULL;
 	int err;
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	if ((n->nlmsg_type != RTM_GETQDISC) && !netlink_capable(skb, CAP_NET_ADMIN))
+#else
 	if ((n->nlmsg_type != RTM_GETQDISC) && !capable(CAP_NET_ADMIN))
+#endif
 		return -EPERM;
 
 	err = nlmsg_parse(n, sizeof(*tcm), tca, TCA_MAX, NULL);
@@ -1123,7 +1127,11 @@ static int tc_modify_qdisc(struct sk_buff *skb, struct nlmsghdr *n)
 	struct Qdisc *q, *p;
 	int err;
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	if (!netlink_capable(skb, CAP_NET_ADMIN))
+#else
 	if (!capable(CAP_NET_ADMIN))
+#endif
 		return -EPERM;
 
 replay:
@@ -1463,7 +1471,11 @@ static int tc_ctl_tclass(struct sk_buff *skb, struct nlmsghdr *n)
 	u32 qid;
 	int err;
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	if ((n->nlmsg_type != RTM_GETTCLASS) && !netlink_capable(skb, CAP_NET_ADMIN))
+#else
 	if ((n->nlmsg_type != RTM_GETTCLASS) && !capable(CAP_NET_ADMIN))
+#endif
 		return -EPERM;
 
 	err = nlmsg_parse(n, sizeof(*tcm), tca, TCA_MAX, NULL);
