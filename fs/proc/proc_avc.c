@@ -51,7 +51,11 @@ int __init sec_avc_log_init(void)
 	return 1;
 }
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 #define BUF_SIZE 256
+#else
+#define BUF_SIZE 512
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 void sec_avc_log(char *fmt, ...)
 {
 	va_list args;
@@ -72,11 +76,10 @@ void sec_avc_log(char *fmt, ...)
 	size = strlen(buf);
 
 	if (idx + size > sec_avc_log_size - 1) {
-		len = scnprintf(&sec_avc_log_buf[0],
-				size + 1, "%s", buf);
+		len = scnprintf(&sec_avc_log_buf[0], size + 1, "%s\n", buf);
 		*sec_avc_log_ptr = len;
 	} else {
-		len = scnprintf(&sec_avc_log_buf[idx], size + 1, "%s", buf);
+		len = scnprintf(&sec_avc_log_buf[idx], size + 1, "%s\n", buf);
 		*sec_avc_log_ptr += len;
 	}
 }

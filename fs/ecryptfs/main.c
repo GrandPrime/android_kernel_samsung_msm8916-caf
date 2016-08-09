@@ -40,6 +40,7 @@
 #include "ecryptfs_kernel.h"
 
 #ifdef CONFIG_SDP
+#include "mm.h"
 #include "ecryptfs_sdp_chamber.h"
 #endif
 
@@ -172,6 +173,11 @@ void ecryptfs_put_lower_file(struct inode *inode)
 	if (atomic_dec_and_mutex_lock(&inode_info->lower_file_count,
 				      &inode_info->lower_file_mutex)) {
 		filemap_write_and_wait(inode->i_mapping);
+#ifdef CONFIG_SDP
+		if (inode_info->crypt_stat.flags & ECRYPTFS_DEK_IS_SENSITIVE) {
+			ecryptfs_mm_do_sdp_cleanup(inode);
+		}
+#endif
 		fput(inode_info->lower_file);
 		inode_info->lower_file = NULL;
 		mutex_unlock(&inode_info->lower_file_mutex);
@@ -187,13 +193,19 @@ enum { ecryptfs_opt_sig, ecryptfs_opt_ecryptfs_sig,
        ecryptfs_opt_unlink_sigs, ecryptfs_opt_mount_auth_tok_only,
        ecryptfs_opt_check_dev_ruid,
 #ifdef CONFIG_WTL_ENCRYPTION_FILTER
-       ecryptfs_opt_enable_filtering,
+	ecryptfs_opt_enable_filtering,
 #endif
 #if defined(CONFIG_CRYPTO_FIPS) && !defined(CONFIG_FORCE_DISABLE_FIPS)
-       ecryptfs_opt_enable_cc,
+	ecryptfs_opt_enable_cc,
 #endif
 #ifdef CONFIG_SDP
-	ecryptfs_opt_userid, ecryptfs_opt_sdp, ecryptfs_opt_chamber_dirs,
+	ecryptfs_opt_userid, ecryptfs_opt_sdp, ecryptfs_opt_chamber_dirs, ecryptfs_opt_partition_id,
+#endif
+#ifdef CONFIG_DLP
+	   ecryptfs_opt_dlp,
+#endif
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+       ecryptfs_opt_base, ecryptfs_opt_type, ecryptfs_opt_label,
 #endif
        ecryptfs_opt_err };
 
@@ -221,7 +233,16 @@ static const match_table_t tokens = {
 #ifdef CONFIG_SDP
 	{ecryptfs_opt_chamber_dirs, "chamber=%s"},
 	{ecryptfs_opt_userid, "userid=%s"},
-	{ecryptfs_opt_sdp, "sdp_enabled"},
+    {ecryptfs_opt_sdp, "sdp_enabled"},
+    {ecryptfs_opt_partition_id, "partition_id=%u"},
+#endif
+#ifdef CONFIG_DLP
+	{ecryptfs_opt_dlp, "dlp_enabled"},
+#endif
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	{ecryptfs_opt_base, "base=%s"},
+	{ecryptfs_opt_type, "type=%s"},
+	{ecryptfs_opt_label, "label=%s"},
 #endif
 	{ecryptfs_opt_err, NULL}
 };
@@ -266,8 +287,19 @@ static void ecryptfs_init_mount_crypt_stat(
 #ifdef CONFIG_SDP
 	spin_lock_init(&mount_crypt_stat->chamber_dir_list_lock);
 	INIT_LIST_HEAD(&mount_crypt_stat->chamber_dir_list);
+
+	mount_crypt_stat->partition_id = -1;
 #endif
 }
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+static void ecryptfs_init_propagate_stat(
+	struct ecryptfs_propagate_stat *propagate_stat)
+{
+	memset((void *)propagate_stat, 0,
+			sizeof(struct ecryptfs_propagate_stat));
+	propagate_stat->propagate_type = TYPE_E_NONE;
+}
+#endif
 
 #ifdef CONFIG_WTL_ENCRYPTION_FILTER
 static int parse_enc_file_filter_parms(
@@ -352,6 +384,10 @@ static int ecryptfs_parse_options(struct ecryptfs_sb_info *sbi, char *options,
 	int fn_cipher_key_bytes_set = 0;
 	struct ecryptfs_mount_crypt_stat *mount_crypt_stat =
 		&sbi->mount_crypt_stat;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	struct ecryptfs_propagate_stat *propagate_stat =
+		&sbi->propagate_stat;
+#endif
 	substring_t args[MAX_OPT_ARGS];
 	int token;
 	char *sig_src;
@@ -363,6 +399,13 @@ static int ecryptfs_parse_options(struct ecryptfs_sb_info *sbi, char *options,
 	char *fnek_src;
 	char *cipher_key_bytes_src;
 	char *fn_cipher_key_bytes_src;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	char *base_path_src;
+	char *base_path_dst;
+	char *propagate_type;
+	char *label_src;
+	char *label_dst;
+#endif
 	u8 cipher_code;
 #if defined(CONFIG_CRYPTO_FIPS) && !defined(CONFIG_FORCE_DISABLE_FIPS)
 	char cipher_mode[ECRYPTFS_MAX_CIPHER_MODE_SIZE] = ECRYPTFS_AES_ECB_MODE;
@@ -375,6 +418,9 @@ static int ecryptfs_parse_options(struct ecryptfs_sb_info *sbi, char *options,
 		goto out;
 	}
 	ecryptfs_init_mount_crypt_stat(mount_crypt_stat);
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	ecryptfs_init_propagate_stat(propagate_stat);
+#endif
 	while ((p = strsep(&options, ",")) != NULL) {
 		if (!*p)
 			continue;
@@ -517,12 +563,63 @@ static int ecryptfs_parse_options(struct ecryptfs_sb_info *sbi, char *options,
 			char *chamber_dirs = args[0].from;
 			char *token = NULL;
 
+			/**
+			 * chamber directories by mount-option.
+			 * The userid in the mount option is used as engine_id
+			 *
+			 * TODO : This won't work when chamber_dirs mount option comes before
+			 * user_id option.
+			 */
 			printk("%s : chamber dirs : %s\n", __func__, chamber_dirs);
 			while ((token = strsep(&chamber_dirs, "|")) != NULL)
-				if(!is_chamber_directory(mount_crypt_stat, token))
-					add_chamber_directory(mount_crypt_stat, token);
+				if(!is_chamber_directory(mount_crypt_stat, (const unsigned char *)token, NULL))
+					add_chamber_directory(mount_crypt_stat,
+					        mount_crypt_stat->userid, (const unsigned char *)token);
 		}
 		break;
+		case ecryptfs_opt_partition_id: {
+            char *partition_id_str = args[0].from;
+            mount_crypt_stat->partition_id =
+                (int)simple_strtol(partition_id_str,
+                           &partition_id_str, 0);
+            printk("%s : partition_id : %d", __func__, mount_crypt_stat->partition_id);
+		}
+		break;
+#endif
+#ifdef CONFIG_DLP
+		case ecryptfs_opt_dlp:
+			mount_crypt_stat->flags |= ECRYPTFS_MOUNT_DLP_ENABLED;
+		break;
+#endif
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+		case ecryptfs_opt_base:
+			base_path_src = args[0].from;
+			base_path_dst = propagate_stat->base_path;
+			strncpy(base_path_dst, base_path_src, ECRYPTFS_BASE_PATH_SIZE);
+			break;
+		case ecryptfs_opt_type:
+			propagate_type = match_strdup(&args[0]);
+			if (!propagate_type)
+				return -ENOMEM;
+			if (!strncmp(propagate_type, "default", strlen("default")))
+				propagate_stat->propagate_type = TYPE_E_DEFAULT;
+			else if (!strncmp(propagate_type, "read", strlen("read")))
+				propagate_stat->propagate_type = TYPE_E_READ;
+			else if (!strncmp(propagate_type, "write", strlen("write")))
+				propagate_stat->propagate_type = TYPE_E_WRITE;
+			else {
+				printk(KERN_WARNING
+					  "%s: eCryptfs: unrecognized option [type=%s]\n",
+					  __func__, propagate_type);
+				propagate_stat->propagate_type = TYPE_E_NONE;
+			}
+			kfree(propagate_type);
+			break;
+		case ecryptfs_opt_label:
+			label_src = args[0].from;
+			label_dst = propagate_stat->label;
+			strncpy(label_dst, label_src, ECRYPTFS_LABEL_SIZE);
+			break;
 #endif
 		case ecryptfs_opt_err:
 		default:
@@ -668,7 +765,11 @@ static struct file_system_type ecryptfs_fs_type;
 static struct dentry *ecryptfs_mount(struct file_system_type *fs_type, int flags,
 			const char *dev_name, void *raw_data)
 {
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	struct super_block *s;
+#else
+	struct super_block *s, *lower_sb;
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	struct ecryptfs_sb_info *sbi;
 	struct ecryptfs_dentry_info *root_info;
 	const char *err = "Getting sb failed";
@@ -705,10 +806,17 @@ static struct dentry *ecryptfs_mount(struct file_system_type *fs_type, int flags
 
 	ecryptfs_set_superblock_private(s, sbi);
 	s->s_bdi = &sbi->bdi;
-
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	if (sbi->propagate_stat.propagate_type != TYPE_E_NONE)
+		s->s_op = &ecryptfs_multimount_sops;
+	else
+		s->s_op = &ecryptfs_sops;
+#endif
 	/* ->kill_sb() will take care of sbi after that point */
 	sbi = NULL;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	s->s_op = &ecryptfs_sops;
+#endif
 	s->s_d_op = &ecryptfs_dops;
 
 	err = "Reading sb failed";
@@ -733,7 +841,10 @@ static struct dentry *ecryptfs_mount(struct file_system_type *fs_type, int flags
 			from_kuid(&init_user_ns, current_uid()));
 		goto out_free;
 	}
-
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	lower_sb = path.dentry->d_sb;
+	atomic_inc(&lower_sb->s_active);
+#endif
 	ecryptfs_set_superblock_lower(s, path.dentry->d_sb);
 
 	/**
@@ -751,18 +862,30 @@ static struct dentry *ecryptfs_mount(struct file_system_type *fs_type, int flags
 	inode = ecryptfs_get_inode(path.dentry->d_inode, s);
 	rc = PTR_ERR(inode);
 	if (IS_ERR(inode))
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 		goto out_free;
+#else
+		goto out_sput;
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 
 	s->s_root = d_make_root(inode);
 	if (!s->s_root) {
 		rc = -ENOMEM;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 		goto out_free;
+#else
+		goto out_sput;
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	}
 
 	rc = -ENOMEM;
 	root_info = kmem_cache_zalloc(ecryptfs_dentry_info_cache, GFP_KERNEL);
 	if (!root_info)
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 		goto out_free;
+#else
+		goto out_sput;
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 
 	/* ->kill_sb() will take care of root_info */
 	ecryptfs_set_dentry_private(s->s_root, root_info);
@@ -771,7 +894,10 @@ static struct dentry *ecryptfs_mount(struct file_system_type *fs_type, int flags
 
 	s->s_flags |= MS_ACTIVE;
 	return dget(s->s_root);
-
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+out_sput:
+	atomic_dec(&lower_sb->s_active);
+#endif
 out_free:
 	path_put(&path);
 out1:
@@ -797,6 +923,11 @@ static void ecryptfs_kill_block_super(struct super_block *sb)
 	kill_anon_super(sb);
 	if (!sb_info)
 		return;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	if (sb_info->wsi_sb)
+		atomic_dec(&sb_info->wsi_sb->s_active);
+#endif
+
 	ecryptfs_destroy_mount_crypt_stat(&sb_info->mount_crypt_stat);
 	bdi_destroy(&sb_info->bdi);
 	kmem_cache_free(ecryptfs_sb_info_cache, sb_info);

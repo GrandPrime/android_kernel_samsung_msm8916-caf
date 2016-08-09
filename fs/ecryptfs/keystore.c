@@ -1786,7 +1786,14 @@ decrypt_passphrase_encrypted_session_key(struct ecryptfs_auth_tok *auth_tok,
 	auth_tok->session_key.flags &= ~ECRYPTFS_CONTAINS_DECRYPTED_KEY;
 #endif
 
-
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	if (unlikely(ecryptfs_verbosity > 0)) {
+		ecryptfs_printk(KERN_DEBUG, "FEK of size [%zd]:\n",
+				crypt_stat->key_size);
+		ecryptfs_dump_hex(crypt_stat->key,
+				  crypt_stat->key_size);
+	}
+#endif
 out:
 	return rc;
 }

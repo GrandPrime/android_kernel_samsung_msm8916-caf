@@ -17,12 +17,22 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef ECRYPTFS_MM_H_
-#define ECRYPTFS_MM_H_
+#ifndef ECRYPTFS_DLP_H
+#define ECRYPTFS_DLP_H
 
-void ecryptfs_mm_drop_cache(int userid, int engineid);
-void ecryptfs_mm_do_sdp_cleanup(struct inode *inode);
+#define KNOX_DLP_XATTR_NAME "user.knox_dlp"
+#define AID_KNOX_DLP		8002
+#define AID_KNOX_DLP_RESTRICTED		8003
 
-void page_dump (struct page *p);
+#define DLP_DEBUG 1
 
-#endif /* ECRYPTFS_MM_H_ */
+struct knox_expiry {
+	int64_t tv_sec;
+	int64_t tv_nsec;
+};
+
+struct knox_dlp_data {
+	struct knox_expiry expiry_time;
+};
+
+#endif /* ECRYPTFS_DLP_H */

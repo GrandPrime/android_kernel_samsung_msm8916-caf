@@ -626,6 +626,13 @@ resizefs_out:
 		return 0;
 	}
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	case FS_IOC_INVAL_MAPPING:
+	{
+		return invalidate_mapping_pages(inode->i_mapping, 0, -1);
+	}
+#endif
+
 	default:
 		return -ENOTTY;
 	}
