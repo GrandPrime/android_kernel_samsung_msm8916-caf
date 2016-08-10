@@ -28,57 +28,18 @@ enum driver_chip {
 
 #define MAX_INTENSITY		10000
 
-#if defined(CONFIG_SEC_GT510_PROJECT)
-#define MOTOR_STRENGTH			98	/*MOTOR_STRENGTH 98 %*/
-#elif defined(CONFIG_MACH_FORTUNA_TMO)
-#define MOTOR_STRENGTH			98	/*MOTOR_STRENGTH 98 %*/
-#elif defined(CONFIG_SEC_A3_PROJECT)
-#define MOTOR_STRENGTH			90	/*MOTOR_STRENGTH 90 %*/
-#elif defined(CONFIG_SEC_A7_PROJECT)
-#define MOTOR_STRENGTH                  95      /*MOTOR_STRENGTH 95 %*/
-#elif defined(CONFIG_MACH_A8_CHN_OPEN)
-#define MOTOR_STRENGTH			84	/*MOTOR_STRENGTH 84 %*/
-#elif defined(CONFIG_SEC_A33G_EUR_PROJECT)
-#define MOTOR_STRENGTH			92	/*MOTOR_STRENGTH 92 % */
+#if defined(CONFIG_SEC_A33G_EUR_PROJECT)
+#define MOTOR_STRENGTH				92	/* MOTOR_STRENGTH 92 % */
 #elif defined(CONFIG_MACH_A3_CHN_CTC)
-#define MOTOR_STRENGTH			85	/*MOTOR_STRENGTH 85 % */
-#elif defined(CONFIG_SEC_FORTUNA_PROJECT)
-#define MOTOR_STRENGTH			90	/*MOTOR_STRENGTH 90 % */
+#define MOTOR_STRENGTH				85	/* MOTOR_STRENGTH 85 % */
 #else
-#define MOTOR_STRENGTH			98	/*MOTOR_STRENGTH 98 %*/
+#define MOTOR_STRENGTH				90	/* MOTOR_STRENGTH 90 % */
 #endif
 
-#if defined(CONFIG_SEC_GT510_PROJECT)
-#define GP_CLK_M_DEFAULT			3
-#define GP_CLK_N_DEFAULT                        140
-#define GP_CLK_D_DEFAULT			70  /* 50% duty cycle */
-#define IMM_PWM_MULTIPLIER			140
-#elif defined(CONFIG_MACH_FORTUNA_TMO)
-#define GP_CLK_M_DEFAULT			3
-#define GP_CLK_N_DEFAULT                        138
-#define GP_CLK_D_DEFAULT			69  /* 50% duty cycle */
-#define IMM_PWM_MULTIPLIER			138
-#elif defined(CONFIG_SEC_A3_PROJECT) || defined(CONFIG_SEC_FORTUNA_PROJECT)
 #define GP_CLK_M_DEFAULT			3
 #define GP_CLK_N_DEFAULT                        121
-#define GP_CLK_D_DEFAULT			61  /* 50% duty cycle */
+#define GP_CLK_D_DEFAULT			61	/* 50% duty cycle */
 #define IMM_PWM_MULTIPLIER			121
-#elif defined(CONFIG_SEC_A7_PROJECT)
-#define GP_CLK_M_DEFAULT                        3
-#define GP_CLK_N_DEFAULT                        119
-#define GP_CLK_D_DEFAULT                        61  /* 50% duty cycle */
-#define IMM_PWM_MULTIPLIER                      119
-#elif defined(CONFIG_MACH_A8_CHN_OPEN)
-#define GP_CLK_M_DEFAULT			3
-#define GP_CLK_N_DEFAULT                        121
-#define GP_CLK_D_DEFAULT			61  /* 50% duty cycle */
-#define IMM_PWM_MULTIPLIER			121
-#else
-#define GP_CLK_M_DEFAULT			3
-#define GP_CLK_N_DEFAULT                        121
-#define GP_CLK_D_DEFAULT			61  /* 50% duty cycle */
-#define IMM_PWM_MULTIPLIER			121
-#endif
 
 #define MOTOR_MIN_STRENGTH			54
 /*

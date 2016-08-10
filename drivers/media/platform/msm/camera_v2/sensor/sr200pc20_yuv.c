@@ -12,8 +12,11 @@
  */
 
 #include "sr200pc20.h"
+#if defined(CONFIG_SEC_ROSSA_PROJECT)
+#include "sr200pc20_yuv_coreprime.h"
+#else
 #include "sr200pc20_yuv.h"
-
+#endif
 #include "msm_sd.h"
 #include "camera.h"
 #include "msm_cci.h"
@@ -36,11 +39,16 @@
 
 static struct yuv_ctrl sr200pc20_ctrl;
 static exif_data_t sr200pc20_exif;
-
+#if defined(CONFIG_SEC_ROSSA_PROJECT)
 bool init_setting_write = FALSE;
+#endif
 
 #if defined CONFIG_SEC_CAMERA_TUNING
+#if defined(CONFIG_SEC_ROSSA_PROJECT)
+#define FILENAME "/data/sr200pc20_yuv_coreprime.h"
+#else
 #define FILENAME "/data/sr200pc20_yuv.h"
+#endif
 extern int register_read_from_sdcard (struct msm_camera_i2c_reg_conf *settings,
 						struct msm_sensor_ctrl_t *s_ctrl,
 						enum msm_camera_i2c_data_type data_type,
@@ -209,8 +217,17 @@ int32_t sr200pc20_set_resolution(struct msm_sensor_ctrl_t *s_ctrl, int mode, int
 		sr200pc20_get_exif(s_ctrl);
 		break;
 	default:
-#if 0
+#if defined(CONFIG_SEC_ROSSA_PROJECT)
 		if (init_setting_write) {
+			if (flicker_type == MSM_CAM_FLICKER_50HZ) {
+				pr_err("%s : %d 50Hz Preview initial\n", __func__, __LINE__);
+				SR200PC20_WRITE_LIST(sr200pc20_640x480_Preview_for_initial_50hz);
+			} else {
+				pr_err("%s : %d 60Hz Preview initial\n", __func__, __LINE__);
+				SR200PC20_WRITE_LIST(sr200pc20_640x480_Preview_for_initial_60hz);
+			}
+			init_setting_write = FALSE;
+		}else {
 			if (flicker_type == MSM_CAM_FLICKER_50HZ) {
 				pr_err("%s : %d 50Hz Preview initial\n", __func__, __LINE__);
 				SR200PC20_WRITE_LIST(sr200pc20_640x480_Preview_for_Return_50hz);
@@ -218,9 +235,8 @@ int32_t sr200pc20_set_resolution(struct msm_sensor_ctrl_t *s_ctrl, int mode, int
 				pr_err("%s : %d 60Hz Preview initial\n", __func__, __LINE__);
 				SR200PC20_WRITE_LIST(sr200pc20_640x480_Preview_for_Return_60hz);
 			}
-			init_setting_write = FALSE;
 		}
-#endif
+#else
 		if (mode == MSM_SENSOR_RES_QTR) {
 			if (flicker_type == MSM_CAM_FLICKER_50HZ) {
 				SR200PC20_WRITE_LIST(sr200pc20_800x600_Preview_for_Return_50hz);
@@ -228,6 +244,7 @@ int32_t sr200pc20_set_resolution(struct msm_sensor_ctrl_t *s_ctrl, int mode, int
 				SR200PC20_WRITE_LIST(sr200pc20_800x600_Preview_for_Return_60hz);
 			}
 		}
+#endif
 #if 0
 		else if (mode == MSM_SENSOR_RES_2) {
 			if (flicker_type == MSM_CAM_FLICKER_50HZ) {
@@ -311,13 +328,10 @@ int32_t sr200pc20_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 		break;
 		case CFG_SET_INIT_SETTING:
 			sr200pc20_ctrl.vtcall_mode = 0;
-#ifdef CONFIG_SEC_CAMERA_TUNING
-			if (front_tune) {
-				register_table_init(FILENAME);
-				pr_err("/data/sr200pc20_yuv.h inside CFG_SET_INIT_SETTING");
-			}
-#endif
 			CDBG("CFG_SET_INIT_SETTING writing INIT registers: sr200pc20_Init_Reg \n");
+#if defined(CONFIG_SEC_ROSSA_PROJECT)
+			init_setting_write = TRUE;
+#endif
 			if (cdata->flicker_type == MSM_CAM_FLICKER_50HZ) {
 				pr_err("%s : %d 50Hz init setting\n", __func__, __LINE__);
 				SR200PC20_WRITE_LIST(sr200pc20_Init_Reg_50hz);
@@ -326,6 +340,12 @@ int32_t sr200pc20_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 				SR200PC20_WRITE_LIST(sr200pc20_Init_Reg_60hz);
 			}
 
+#ifdef CONFIG_SEC_CAMERA_TUNING
+		if (front_tune){
+			register_table_init(FILENAME);
+			pr_err("/data/sr200pc20_yuv.h inside CFG_SET_INIT_SETTING");
+		}
+#endif
 			break;
 		case CFG_SET_RESOLUTION:
 			resolution = *((int32_t  *)cdata->cfg.setting);
@@ -338,7 +358,6 @@ int32_t sr200pc20_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 						pr_err("%s : %d 60Hz VT init setting\n", __func__,	__LINE__);
 						SR200PC20_WRITE_LIST(sr200pc20_VT_Init_Reg_60Hz);
 					}
-					break;
 				}else {
 #if 0
 					if (cdata->flicker_type == MSM_CAM_FLICKER_50HZ) {

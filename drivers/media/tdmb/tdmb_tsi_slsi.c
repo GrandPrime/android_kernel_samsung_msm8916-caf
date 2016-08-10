@@ -24,7 +24,6 @@
 #include <linux/io.h>
 #include <linux/sched.h>
 #include <linux/pm_qos.h>
-#include <linux/pinctrl/consumer.h>
 #include <mach/irqs.h>
 #include <mach/gpio.h>
 #include <mach/map.h>
@@ -76,7 +75,7 @@
 #define	EXYNOS5_TS_PID31			EXYNOS5_TSIREG(0xA0)
 #define	EXYNOS5_TS_BYTE_SWAP		EXYNOS5_TSIREG(0xBC)
 
-/* #define TS_TIMEOUT_CNT_MAX	(0x00FFFFFF) */
+#define TS_TIMEOUT_CNT_MAX		(0x00FFFFFF)
 #define TS_NUM_PKT			(4)
 #define TS_PKT_SIZE			47
 #define TS_PKT_BUF_SIZE			(TS_PKT_SIZE*TS_NUM_PKT)
@@ -223,8 +222,6 @@ struct tsi_dev {
 	struct list_head free_list;
 	struct list_head full_list;
 	struct list_head partial_list;
-	struct pinctrl *tdmb_tsi_pinctrl;
-	struct pinctrl_state *tsi_on, *tsi_off;
 };
 
 struct tsi_dev *tsi_priv;
@@ -253,16 +250,18 @@ static void list_debug(struct list_head *head, const char *str)
 }
 #endif
 
-static void exynos5_tsi_set_gpio(struct tsi_dev *tsi, bool on)
+static void exynos5_tsi_set_gpio(bool on)
 {
 	DPRINTK("%s: %d\n", __func__, on);
 	if (on) {
-		if (pinctrl_select_state(tsi->tdmb_tsi_pinctrl,
-							tsi->tsi_on))
+		struct pinctrl *pinctrl;
+		pinctrl = devm_pinctrl_get_select(&exynos5_tsi_dev->dev, "tdmb_tsi_on");
+		if (IS_ERR(pinctrl))
 			DPRINTK("%s: Failed to configure tdmb_tsi_on\n", __func__);
 	} else {
-		if (pinctrl_select_state(tsi->tdmb_tsi_pinctrl,
-							tsi->tsi_off))
+		struct pinctrl *pinctrl;
+		pinctrl = devm_pinctrl_get_select(&exynos5_tsi_dev->dev, "tdmb_tsi_off");
+		if (IS_ERR(pinctrl))
 			DPRINTK("%s: Failed to configure tdmb_tsi_off\n", __func__);
 	}
 }
@@ -274,12 +273,12 @@ static void exynos5_tsi_reset(struct tsi_dev *tsi)
 	tscon |= EXYNOS5_TSI_SWRESET;
 	writel(tscon, (tsi->tsi_base + EXYNOS5_TS_CON));
 }
-/*
+
 static void exynos5_tsi_set_timeout(u32 count, struct tsi_dev *tsi)
 {
 	writel(count, (tsi->tsi_base + EXYNOS5_TS_CNT));
 }
-*/
+
 static struct tsi_pkt *tsi_get_pkt(struct tsi_dev *tsi, struct list_head *head)
 {
 	unsigned long flags;
@@ -366,7 +365,7 @@ static void exynos5_tsi_setup(struct tsi_dev *tsi)
 	struct exynos5_tsi_conf *conf = tsi->tsi_conf;
 
 	exynos5_tsi_reset(tsi);
-	/* exynos5_tsi_set_timeout(TS_TIMEOUT_CNT_MAX, tsi); */
+	exynos5_tsi_set_timeout(TS_TIMEOUT_CNT_MAX, tsi);
 
 	tscon = readl((tsi->tsi_base + EXYNOS5_TS_CON));
 
@@ -388,7 +387,7 @@ static void exynos5_tsi_setup(struct tsi_dev *tsi)
 	tscon |= (EXYNOS5_TSI_OUT_BUF_FULL_INT_ENA | EXYNOS5_TSI_INT_FIFO_FULL_INT_ENA);
 	tscon |= (/*EXYNOS5_TSI_SYNC_MISMATCH_INT_SKIP |*/ EXYNOS5_TSI_PSUF_INT_SKIP |
 					EXYNOS5_TSI_PSOF_INT_SKIP);
-	/* tscon |= (EXYNOS5_TSI_TS_CLK_TIME_OUT_INT); */
+	tscon |= (EXYNOS5_TSI_TS_CLK_TIME_OUT_INT);
 	/* These values are bd dependent? */
 	tscon |= (EXYNOS5_TSI_TS_VALID_ACTIVE_HIGH | EXYNOS5_TSI_CLK_INVERT_LOW);
 	writel(tscon, (tsi->tsi_base + EXYNOS5_TS_CON));
@@ -465,9 +464,9 @@ static int exynos5_tsi_start(struct tsi_dev *tsi, void (*callback)(u8 *data, u32
 	struct tsi_pkt *pkt;
 	int ret;
 
-	pm_qos_add_request(&mif_handle, PM_QOS_BUS_THROUGHPUT, 413000);
+	pm_qos_add_request(&mif_handle, PM_QOS_BUS_THROUGHPUT, 275000);
 
-	exynos5_tsi_set_gpio(tsi, true);
+	exynos5_tsi_set_gpio(true);
 	if(exynos5_tsi_clk_enable(tsi)) {
 		DPRINTK("%s: clk_prepare_enable failed\n", __func__);
 		ret = -ENOMEM;
@@ -540,7 +539,7 @@ err_packets:
 err_clk:
 	exynos5_tsi_clk_disable(tsi);
 err_gpio:
-	exynos5_tsi_set_gpio(tsi, false);
+	exynos5_tsi_set_gpio(false);
 	pm_qos_remove_request(&mif_handle);
 
 	return ret;
@@ -567,12 +566,11 @@ static int exynos5_tsi_stop(struct tsi_dev *tsi)
 
 	tsi_disable_interrupts(tsi);
 	exynos5_tsi_set_clock(TSI_CLK_STOP, tsi->tsi_base + EXYNOS5_TS_CLKCON);
-	exynos5_tsi_set_gpio(tsi, false);
-	exynos5_tsi_clk_disable(tsi);
-
-	tdmb_tsi_destroy_workqueue();
-	tsi_data_callback = NULL;
 	tsi_free_packets(tsi);
+	exynos5_tsi_set_gpio(false);
+	tdmb_tsi_destroy_workqueue();
+	exynos5_tsi_clk_disable(tsi);
+	tsi_data_callback = NULL;
 	pm_qos_remove_request(&mif_handle);
 
 	return 0;
@@ -599,10 +597,6 @@ static void tdmb_tsi_pull_data(struct work_struct *work)
 		struct tsi_dev *tsi = platform_get_drvdata(exynos5_tsi_dev);
 		struct tsi_pkt *pkt;
 		unsigned long flags;
-
-		if (!tsi->running)
-			return ;
-
 #ifdef CONFIG_TSI_LIST_DEBUG
 		list_debug(&tsi->free_list, "free_list");
 		/* list_debug(&tsi->partial_list, "partial_list"); */
@@ -764,34 +758,10 @@ static int tdmb_tsi_probe(struct platform_device *pdev)
 	/* DPRINTK("TSI dev dma mem phy %x virt %p\n", map_dma, tsi_priv->tsi_buf_virt); */
 	tsi_priv->tsi_buf_phy = map_dma;
 
-	tsi_priv->tdmb_tsi_pinctrl = devm_pinctrl_get(dev);
-	if (IS_ERR(tsi_priv->tdmb_tsi_pinctrl))
-		goto err_pinctrl;
-
-	tsi_priv->tsi_on = pinctrl_lookup_state(tsi_priv->tdmb_tsi_pinctrl, "tdmb_tsi_on");
-	if(IS_ERR(tsi_priv->tsi_on)) {
-		ret = -EINVAL;
-		DPRINTK("%s : could not get pins tsi_on state (%li)\n",
-			__func__, PTR_ERR(tsi_priv->tsi_on));
-		goto err_pinctrl_lookup_state;
-	}
-
-	tsi_priv->tsi_off = pinctrl_lookup_state(tsi_priv->tdmb_tsi_pinctrl, "tdmb_tsi_off");
-	if(IS_ERR(tsi_priv->tsi_off)) {
-		ret = -EINVAL;
-		DPRINTK("%s : could not get pins tsi_off state (%li)\n",
-			__func__, PTR_ERR(tsi_priv->tsi_off));
-		goto err_pinctrl_lookup_state;
-	}
-
 	platform_set_drvdata(pdev, tsi_priv);
 	exynos5_tsi_dev = pdev;
 
 	return 0;
-err_pinctrl_lookup_state:
-	devm_pinctrl_put(tsi_priv->tdmb_tsi_pinctrl);
-err_pinctrl:
-	dma_free_coherent(dev, tsi_priv->tsi_buf_size, tsi_priv->tsi_buf_virt, tsi_priv->tsi_buf_phy);
 err_map:
 	iounmap(tsi_priv->tsi_base);
 err_irq:

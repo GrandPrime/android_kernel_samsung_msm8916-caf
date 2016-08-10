@@ -20,12 +20,36 @@
 #include <linux/regulator/rpm-smd-regulator.h>
 #include <linux/regulator/consumer.h>
 
-/*#define CONFIG_MSMB_CAMERA_DEBUG*/
+//#define CONFIG_MSMB_CAMERA_DEBUG
 #undef CDBG
 #ifdef CONFIG_MSMB_CAMERA_DEBUG
 #define CDBG(fmt, args...) pr_err(fmt, ##args)
 #else
 #define CDBG(fmt, args...) do { } while (0)
+#endif
+#if defined(CONFIG_FLED_LM3632)
+extern void ssflash_led_turn_on(void);
+extern void ssflash_led_turn_off(void);
+#endif
+
+#if defined(CONFIG_FLED_LM3632)
+int32_t msm_sensor_flash_native_control(struct msm_sensor_ctrl_t *s_ctrl,
+	void __user *argp)
+{
+	struct ioctl_native_cmd *cam_info = (struct ioctl_native_cmd *)argp;
+		if(s_ctrl->sensordata->slave_info->sensor_id == 0x5e30){
+		if(cam_info->value_1 == 3) {
+			pr_err("%s : Front LED turn on\n", __func__);
+			ssflash_led_turn_on();
+	} else if(cam_info->value_1 == 0) {
+			pr_err("%s : Front LED turn off\n", __func__);
+			ssflash_led_turn_off();
+		}else{
+			pr_err("%s : Invalid LED value\n", __func__);
+		}
+	}
+	return 0;
+}
 #endif
 
 static void msm_sensor_adjust_mclk(struct msm_camera_power_ctrl_t *ctrl)
@@ -431,6 +455,12 @@ int msm_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 	sensor_device_type = s_ctrl->sensor_device_type;
 	sensor_i2c_client = s_ctrl->sensor_i2c_client;
 
+#if defined(CONFIG_FLED_LM3632)
+	if(s_ctrl->sensordata->slave_info->sensor_id == 0x5e30){
+		pr_err("%s : Front LED turn off\n", __func__);
+		ssflash_led_turn_off();
+	}
+#endif
 	if (!power_info || !sensor_i2c_client) {
 		pr_err("%s:%d failed: power_info %p sensor_i2c_client %p\n",
 			__func__, __LINE__, power_info, sensor_i2c_client);
@@ -498,6 +528,9 @@ int msm_sensor_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 	struct msm_camera_i2c_client *sensor_i2c_client;
 	struct msm_camera_slave_info *slave_info;
 	const char *sensor_name;
+#if defined(CONFIG_SEC_ROSSA_PROJECT)
+	enum msm_camera_i2c_data_type data_type = MSM_CAMERA_I2C_WORD_DATA;
+#endif
 
 	if (!s_ctrl) {
 		pr_err("%s:%d failed: %p\n",
@@ -515,9 +548,47 @@ int msm_sensor_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 		return -EINVAL;
 	}
 
+#if defined(CONFIG_SEC_ROSSA_PROJECT)
+		if (slave_info->sensor_id == 0xb4)
+			data_type = MSM_CAMERA_I2C_BYTE_DATA;
+		rc = sensor_i2c_client->i2c_func_tbl->i2c_read(
+			sensor_i2c_client, slave_info->sensor_id_reg_addr,
+			&chipid, data_type);
+		if (chipid != slave_info->sensor_id) {
+			if(slave_info->sensor_id== 0x4405)
+			{
+				uint16_t original_sid = 0;
+				chipid = 0;
+				original_sid = sensor_i2c_client->cci_client->sid;
+				s_ctrl->sensor_i2c_client->cci_client->sid = 0x50 >> 1;
+				rc = sensor_i2c_client->i2c_func_tbl->i2c_read(
+					sensor_i2c_client, slave_info->sensor_id_reg_addr,&chipid, data_type);
+				 printk("%s: read id: %x expected id %x:\n", __func__, chipid,
+					s_ctrl->sensordata->slave_info->sensor_id);
+				 if (chipid != slave_info->sensor_id) {
+					chipid = 0;
+					s_ctrl->sensor_i2c_client->cci_client->sid = 0x40 >> 1;
+					rc = sensor_i2c_client->i2c_func_tbl->i2c_read(
+						sensor_i2c_client, slave_info->sensor_id_reg_addr, &chipid, data_type);
+					printk("%s: read id: %x expected id %x:\n", __func__, chipid,
+						s_ctrl->sensordata->slave_info->sensor_id);
+					if (chipid != slave_info->sensor_id) {
+						// If sensor id not matched finally, restore sensor_id and sid to original values.
+						pr_err("msm_sensor_match_id chip id doesnot match\n");
+						s_ctrl->sensor_i2c_client->cci_client->sid = original_sid;
+						return 0;
+					}
+				}
+			}
+			pr_err("msm_sensor_match_id chip id doesnot match\n");
+			return 0;
+		}
+#else
+
 	rc = sensor_i2c_client->i2c_func_tbl->i2c_read(
 		sensor_i2c_client, slave_info->sensor_id_reg_addr,
 		&chipid, MSM_CAMERA_I2C_WORD_DATA);
+#endif
 	if (rc < 0) {
 		pr_err("%s: %s: read id failed\n", __func__, sensor_name);
 		return rc;
@@ -1231,7 +1302,14 @@ int msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void __user *argp)
 		}
 		break;
 	}
-
+	case CFG_SET_START_STREAM: {
+		rc = 0;
+		break;
+	}
+	case CFG_SET_STOP_STREAM: {
+		rc = 0;
+		break;
+	}
 	default:
 		rc = -EFAULT;
 		break;

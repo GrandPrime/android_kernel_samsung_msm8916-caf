@@ -221,16 +221,16 @@ int update_dsi_tcon_mdnie_register(struct samsung_display_driver_data *vdd)
 	}
 
 	if (tune_data_dsi0 && vdd && mdnie_tune_state) {
-                if(vdd->ctrl_dsi[DSI_CTRL_0]->cmd_sync_wait_broadcast) { /* Dual DSI */
-                        vdd->mdnie_tune_data[DSI_CTRL_1].mdnie_tune_packet_tx_cmds_dsi.cmds = tune_data_dsi0;
-                        vdd->mdnie_tune_data[DSI_CTRL_1].mdnie_tune_packet_tx_cmds_dsi.cmd_cnt = mdnie_data.dsi0_bypass_mdnie_size;
-                        mdss_samsung_send_cmd(vdd->ctrl_dsi[DSI_CTRL_1], PANEL_MDNIE_TUNE);
-                } else { /* Single DSI */
-                        vdd->mdnie_tune_data[DSI_CTRL_0].mdnie_tune_packet_tx_cmds_dsi.cmds = tune_data_dsi0;
-                        vdd->mdnie_tune_data[DSI_CTRL_0].mdnie_tune_packet_tx_cmds_dsi.cmd_cnt = mdnie_data.dsi0_bypass_mdnie_size;
-                        mdss_samsung_send_cmd(vdd->ctrl_dsi[DSI_CTRL_0], PANEL_MDNIE_TUNE);
-                }
-        } else
+		if(vdd->ctrl_dsi[DSI_CTRL_0]->cmd_sync_wait_broadcast) { /* Dual DSI */
+			vdd->mdnie_tune_data[DSI_CTRL_1].mdnie_tune_packet_tx_cmds_dsi.cmds = tune_data_dsi0;
+			vdd->mdnie_tune_data[DSI_CTRL_1].mdnie_tune_packet_tx_cmds_dsi.cmd_cnt = mdnie_data.dsi0_bypass_mdnie_size;
+			mdss_samsung_send_cmd(vdd->ctrl_dsi[DSI_CTRL_1], PANEL_MDNIE_TUNE);
+		} else { /* Single DSI */
+			vdd->mdnie_tune_data[DSI_CTRL_0].mdnie_tune_packet_tx_cmds_dsi.cmds = tune_data_dsi0;
+			vdd->mdnie_tune_data[DSI_CTRL_0].mdnie_tune_packet_tx_cmds_dsi.cmd_cnt = mdnie_data.dsi0_bypass_mdnie_size;
+			mdss_samsung_send_cmd(vdd->ctrl_dsi[DSI_CTRL_0], PANEL_MDNIE_TUNE);
+		}
+	} else
 		DPRINT("Command Tx Fail,  tune_data_dsi0=%p, vdd=%p, mdnie_tune_state=%p \n", tune_data_dsi0, vdd, mdnie_tune_state);
 	return 0;
 }
@@ -347,9 +347,8 @@ static ssize_t scenario_store(struct device *dev,
 			vdd = mdnie_tune_state->vdd;
 
 		mdnie_tune_state->mdnie_app = value;
+		DPRINT("%s APP : %d\n", __func__, mdnie_tune_state->mdnie_app);
 	}
-
-	DPRINT("%s APP : %d\n", __func__, mdnie_tune_state->mdnie_app);
 
 	update_dsi_tcon_mdnie_register(vdd);
 
@@ -480,7 +479,10 @@ static ssize_t accessibility_store(struct device *dev,
 	int buffer2[MDNIE_COLOR_BLINDE_CMD_SIZE/2] = {0,};
 	int loop;
 	char temp;
-	struct samsung_display_driver_data *vdd = NULL;
+	struct samsung_display_driver_data *vdd = samsung_get_vdd();
+	if (IS_ERR_OR_NULL(vdd)) {
+		pr_err("%s vdd is error", __func__);
+	};
 
 	sscanf(buf, "%d %x %x %x %x %x %x %x %x %x", &cmd_value,
 		&buffer2[0], &buffer2[1], &buffer2[2], &buffer2[3], &buffer2[4],
@@ -492,19 +494,26 @@ static ssize_t accessibility_store(struct device *dev,
 		buffer[loop * 2 + 1] = buffer2[loop] & 0xFF;
 	}
 
-	for(loop = 0; loop < MDNIE_COLOR_BLINDE_CMD_SIZE; loop+=2) {
-		temp = buffer[loop];
-		buffer[loop] = buffer[loop + 1];
-		buffer[loop + 1] = temp;
+	if(!vdd->dtsi_data[0].lcd_display_format_bgr) {
+		for(loop = 0; loop < MDNIE_COLOR_BLINDE_CMD_SIZE; loop+=2) {
+			temp = buffer[loop];
+			buffer[loop] = buffer[loop + 1];
+			buffer[loop + 1] = temp;
+		}
 	}
 
+	if(vdd->dtsi_data[0].lcd_display_format_bgr) {
+		for(loop = 0; loop < MDNIE_COLOR_BLINDE_CMD_SIZE/2; loop++) {
+			temp = buffer[loop];
+			buffer[loop] = buffer[MDNIE_COLOR_BLINDE_CMD_SIZE-loop-1];
+			buffer[MDNIE_COLOR_BLINDE_CMD_SIZE-loop-1] = temp;
+		}
+	}
 	/*
 	* mDnie priority
 	* Accessibility > HBM > Screen Mode
 	*/
 	list_for_each_entry_reverse(mdnie_tune_state, &mdnie_list , used_list) {
-		if (!vdd)
-			vdd = mdnie_tune_state->vdd;
 
 		if (cmd_value == NEGATIVE) {
 			mdnie_tune_state->mdnie_accessibility = NEGATIVE;

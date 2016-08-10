@@ -2591,6 +2591,7 @@ static int tiocgetd(struct tty_struct *tty, int __user *p)
 	return ret;
 }
 
+
 /**
  *	send_break	-	performed time break
  *	@tty: device to break on

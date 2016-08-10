@@ -17,8 +17,7 @@
 #include <linux/platform_device.h>
 #include <linux/stringify.h>
 #include <linux/types.h>
-#include <linux/lcd.h>
-#include <dlog.h>
+
 /* panel id type */
 struct panel_id {
 	u16 id;
@@ -298,7 +297,6 @@ struct mipi_panel_info {
 	char lp11_init;
 	u32  init_delay;
 	u32  power_off_delay;
-	u32  additional_delay;
 };
 
 struct edp_panel_info {
@@ -380,11 +378,6 @@ struct mdss_panel_info {
 	u32 rst_seq[MDSS_DSI_RST_SEQ_LEN];
 	u32 rst_seq_len;
 	u32 vic; /* video identification code */
-	u32 roi_x;
-	u32 roi_y;
-	u32 roi_w;
-	u32 roi_h;
-	int bklt_ctrl;	/* backlight ctrl */
 	struct mdss_rect roi;
 	int pwm_pmic_gpio;
 	int pwm_lpg_chan;
@@ -415,7 +408,6 @@ struct mdss_panel_info {
 	u32 partial_update_roi_merge;
 	struct ion_handle *splash_ihdl;
 	int panel_power_state;
-	u32 panel_power_on;
 	int blank_state;
 
 	uint32_t panel_dead;
@@ -459,7 +451,6 @@ struct mipi_samsung_driver_data {
 	void *mdss_panel_data;
 	void *mdss_dsi_ctrl_pdata;
 };
-
 struct mdss_panel_data {
 	struct mdss_panel_info panel_info;
 	void (*set_backlight) (struct mdss_panel_data *pdata, u32 bl_level);

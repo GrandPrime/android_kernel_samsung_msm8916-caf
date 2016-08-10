@@ -16,7 +16,6 @@
 
 #include <linux/list.h>
 #include <linux/mdss_io_util.h>
-#include <mach/scm-io.h>
 #include <linux/irqreturn.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/gpio.h>
@@ -94,7 +93,6 @@ enum dsi_panel_bl_ctrl {
 #if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
 	BL_SS_PWM,
 #endif
-
 	UNKNOWN_CTRL,
 };
 
@@ -159,8 +157,8 @@ enum dsi_pm_type {
 #define DSI_CMD_DST_FORMAT_RGB666	7
 #define DSI_CMD_DST_FORMAT_RGB888	8
 
-#define DSI_INTR_DYNAMIC_REFRESH_MASK	BIT(29)
-#define DSI_INTR_DYNAMIC_REFRESH_DONE	BIT(28)
+#define DSI_INTR_DYNAMIC_REFRESH_MASK		BIT(29)
+#define DSI_INTR_DYNAMIC_REFRESH_DONE		BIT(28)
 #define DSI_INTR_ERROR_MASK		BIT(25)
 #define DSI_INTR_ERROR			BIT(24)
 #define DSI_INTR_BTA_DONE_MASK          BIT(21)
@@ -186,14 +184,14 @@ enum dsi_pm_type {
 #define DSI_BTA_TERM    BIT(1)
 #define DSI_CMD_TERM    BIT(0)
 
-#define DSI_DATA_LANES_STOP_STATE	0xF
-#define DSI_CLK_LANE_STOP_STATE		BIT(4)
-
 /* offsets for dynamic refresh */
 #define DSI_DYNAMIC_REFRESH_CTRL		0x200
 #define DSI_DYNAMIC_REFRESH_PIPE_DELAY		0x204
 #define DSI_DYNAMIC_REFRESH_PIPE_DELAY2		0x208
 #define DSI_DYNAMIC_REFRESH_PLL_DELAY		0x20C
+
+#define DSI_DATA_LANES_STOP_STATE	0xF
+#define DSI_CLK_LANE_STOP_STATE		BIT(4)
 
 extern struct device dsi_dev;
 extern u32 dsi_irq;
@@ -240,6 +238,7 @@ struct dsi_clk_desc {
 	u32 pre_div_func;
 };
 
+
 struct dsi_panel_cmds {
 	char *buf;
 	int blen;
@@ -262,7 +261,6 @@ struct dsi_drv_cm_data {
 	struct regulator *vdd_vreg;
 	struct regulator *vdd_io_vreg;
 	struct regulator *vdda_vreg;
-	int broadcast_enable;
 };
 
 struct dsi_pinctrl_res {
@@ -343,7 +341,6 @@ struct mdss_dsi_ctrl_pdata {
 	int (*panel_reset) (struct mdss_panel_data *pdata, int enable);
 #ifdef CONFIG_FB_MSM_MDSS_SAMSUNG
 	int (*event_handler) (struct mdss_panel_data *pdata, int e, void *arg);
-	int lcd_select_gpio;
 #endif
 	struct mdss_panel_data panel_data;
 	unsigned char *ctrl_base;
@@ -368,15 +365,12 @@ struct mdss_dsi_ctrl_pdata {
 	struct clk *shadow_byte_clk;
 	struct clk *shadow_pixel_clk;
 	struct clk *vco_clk;
-#ifdef CONFIG_FB_MSM_MDSS_SAMSUNG
-	struct clk *lvds_clk;
-#endif
 	u8 ctrl_state;
 	int panel_mode;
 	int irq_cnt;
+	int disp_te_gpio;
 	int rst_gpio;
 	int disp_en_gpio;
-	int disp_te_gpio;
 	int bklt_en_gpio;
 	int mode_gpio;
 	int bklt_ctrl;	/* backlight ctrl */

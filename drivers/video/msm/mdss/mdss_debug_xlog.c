@@ -11,8 +11,6 @@
  *
  */
 
-#define __DLOG_IMPLEMENTAION_MODULE__
-
 #include <linux/delay.h>
 #include <linux/spinlock.h>
 #include <linux/ktime.h>
@@ -144,6 +142,11 @@ void mdss_xlog_dump(void)
 	if (!mdd->logd.xlog_enable)
 		return;
 
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	/* To block mdss_xlog() function */
+	mdd->logd.xlog_enable = false;
+#endif
+
 	spin_lock_irqsave(&mdss_dbg_xlog.xlock, flags);
 	i = mdss_dbg_xlog.first;
 	for (n = 0; n < MDSS_XLOG_ENTRY; n++) {
@@ -205,10 +208,10 @@ void mdss_xlog_tout_handler(const char *name, ...)
 						blk_base->max_offset);
 			}
 #if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
-			if (!strncmp(blk_base->name, "dsi0", 4))
+			if (!strcmp(blk_base->name, "dsi0"))
 				dsi0_addr = blk_base->base;
 
-			if (!strncmp(blk_base->name, "dsi1", 4))
+			if (!strcmp(blk_base->name, "dsi1"))
 				dsi1_addr = blk_base->base;
 #endif
 		}
@@ -229,11 +232,7 @@ void mdss_xlog_tout_handler(const char *name, ...)
 	if (dsi1_addr)
 		mdss_samsung_dsi_dump_regs(1);
 
-	mdss_samsung_dsi_te_check();
-
-	mdss_mdp_underrun_dump_info();
-
-	if (dead)
+	if(dead)
 		panic(name);
 #endif
 

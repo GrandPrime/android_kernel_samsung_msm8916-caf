@@ -43,7 +43,9 @@ static enum power_supply_property rt5033_fuelgauge_props[] = {
 	POWER_SUPPLY_PROP_TEMP,
 	POWER_SUPPLY_PROP_TEMP_AMBIENT,
 	POWER_SUPPLY_PROP_ENERGY_FULL_DESIGN,
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	POWER_SUPPLY_PROP_CHARGE_TYPE,
+#endif
 };
 
 static int offset_li(int voltNR, int tempNR,
@@ -1431,7 +1433,11 @@ static int sec_fg_check_capacity_max(
 }
 
 static int sec_fg_calculate_dynamic_scale(
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+				struct sec_fuelgauge_info *fuelgauge)
+#else
 				struct sec_fuelgauge_info *fuelgauge, int capacity)
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 {
 	union power_supply_propval raw_soc_val;
 
@@ -1461,18 +1467,23 @@ static int sec_fg_calculate_dynamic_scale(
 		dev_dbg(&fuelgauge->client->dev, "%s: raw soc (%d)",
 			__func__, fuelgauge->capacity_max);
 	}
-
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	if (capacity != 100) {
 		fuelgauge->capacity_max = sec_fg_check_capacity_max(
 			fuelgauge, (fuelgauge->capacity_max * 100 / capacity));
 	} else  {
+#endif
 		fuelgauge->capacity_max =
 			(fuelgauge->capacity_max * 99 / 100);
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	}
-
+#endif
 	/* update capacity_old for sec_fg_get_atomic_capacity algorithm */
+if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	fuelgauge->capacity_old = 100;
+#else
 	fuelgauge->capacity_old = capacity;
-
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	dev_info(&fuelgauge->client->dev, "%s: %d is used for capacity_max\n",
 		__func__, fuelgauge->capacity_max);
 
@@ -1492,6 +1503,7 @@ bool sec_hal_fg_reset(struct i2c_client *client)
 	return true;
 }
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 static int pre_vcell;
 
 /* if ret < 0, discharge */
@@ -1560,12 +1572,17 @@ void rt5033_fg_reset_capacity_by_jig_connection(struct i2c_client *client)
 	psy_do_property("battery", set,
 			POWER_SUPPLY_PROP_VOLTAGE_NOW, value);
 }
+#endif
 
 bool sec_hal_fg_get_property(struct i2c_client *client,
 			     enum power_supply_property psp,
 			     union power_supply_propval *val)
 {
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	union power_supply_propval value , value2;
+#else
 	union power_supply_propval value;
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	struct sec_fuelgauge_info *fuelgauge =
 		i2c_get_clientdata(client);
 
@@ -1598,11 +1615,25 @@ bool sec_hal_fg_get_property(struct i2c_client *client,
 			break;
 			/* Current (mA) */
 		case POWER_SUPPLY_PROP_CURRENT_NOW:
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 			val->intval = 0;
 			break;
+#endif
 			/* Average Current (mA) */
 		case POWER_SUPPLY_PROP_CURRENT_AVG:
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+			psy_do_property("battery", get,
+			POWER_SUPPLY_PROP_HEALTH, value);
+			psy_do_property("battery", get,
+			POWER_SUPPLY_PROP_ONLINE, value2);
+
+			if ((value.intval != POWER_SUPPLY_HEALTH_GOOD) || (value2.intval == POWER_SUPPLY_TYPE_USB))
+				val->intval = -1;
+			else
+				val->intval = 0;
+#else
 			val->intval = rt5033_get_current_average(client);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 			break;
 		case POWER_SUPPLY_PROP_CHARGE_FULL:
 			val->intval =
@@ -1701,7 +1732,9 @@ static int rt5033_fg_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_STATUS:
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	case POWER_SUPPLY_PROP_CHARGE_TYPE:
+#endif
 		return -ENODATA;
 	default:
 		return -EINVAL;
@@ -1715,8 +1748,10 @@ bool sec_hal_fg_set_property(struct i2c_client *client,
 {
     struct sec_fuelgauge_info *fuelgauge = i2c_get_clientdata(client);
 	switch (psp) {
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	case POWER_SUPPLY_PROP_ONLINE:
 		break;
+#endif
 		/* Battery Temperature */
 	case POWER_SUPPLY_PROP_TEMP:
                 fuelgauge->info.temperature = val->intval;
@@ -1742,6 +1777,12 @@ static int rt5033_fg_set_property(struct power_supply *psy,
 			sec_hal_fg_full_charged(fuelgauge->client);
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+		if (val->intval == POWER_SUPPLY_TYPE_BATTERY) {
+			if (fuelgauge->pdata->capacity_calculation_type &
+				SEC_FUELGAUGE_CAPACITY_TYPE_DYNAMIC_SCALE)
+				sec_fg_calculate_dynamic_scale(fuelgauge);
+#else
 		if (fuelgauge->pdata->capacity_calculation_type &
 			SEC_FUELGAUGE_CAPACITY_TYPE_DYNAMIC_SCALE) {
 #if defined(CONFIG_PREVENT_SOC_JUMP)
@@ -1749,6 +1790,7 @@ static int rt5033_fg_set_property(struct power_supply *psy,
 #else
 			sec_fg_calculate_dynamic_scale(fuelgauge, 100);
 #endif
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	}
 		break;
 	case POWER_SUPPLY_PROP_ONLINE:
@@ -1777,9 +1819,11 @@ static int rt5033_fg_set_property(struct power_supply *psy,
 		fuelgauge->capacity_max = sec_fg_check_capacity_max(fuelgauge, val->intval);
 		fuelgauge->initial_update_of_soc = true;
 		break;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	case POWER_SUPPLY_PROP_CHARGE_TYPE:
 		rt5033_fg_reset_capacity_by_jig_connection(fuelgauge->client);
         break;
+#endif
 	default:
 		return -EINVAL;
 	}
@@ -2058,7 +2102,11 @@ static int rt5033_fuelgauge_probe(struct i2c_client *client,
             POWER_SUPPLY_PROP_CAPACITY, &raw_soc_val);
     raw_soc_val.intval /= 10;
     if(raw_soc_val.intval > fuelgauge->pdata->capacity_max)
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+                sec_fg_calculate_dynamic_scale(fuelgauge);
+#else
 			sec_fg_calculate_dynamic_scale(fuelgauge, 100);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 
 	ret = power_supply_register(&client->dev, &fuelgauge->psy_fg);
 	if (ret) {
@@ -2113,8 +2161,10 @@ static int rt5033_fuelgauge_probe(struct i2c_client *client,
 	}
 
 	fuelgauge->initial_update_of_soc = true;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	if (sec_bat_check_jig_status())
 		rt5033_fg_reset_capacity_by_jig_connection(client);
+#endif
 
 	ret = rt5033_create_attrs(fuelgauge->psy_fg.dev);
 	if (ret) {

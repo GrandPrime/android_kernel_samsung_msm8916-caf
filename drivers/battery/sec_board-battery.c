@@ -24,9 +24,6 @@
 #include <linux/qpnp/qpnp-adc.h>
 #include <linux/regulator/krait-regulator.h>
 
-#if defined(CONFIG_BATTERY_SAMSUNG)
-#include <linux/battery/sec_battery.h>
-#endif
 #if defined(CONFIG_FUELGAUGE_RT5033)
 #include <linux/battery/fuelgauge/rt5033_fuelgauge.h>
 #elif defined(CONFIG_FUELGAUGE_MAX77849)
@@ -35,7 +32,7 @@
 #include <linux/battery/fuelgauge/sm5703_fuelgauge.h>
 #elif defined(CONFIG_FUELGAUGE_SM5705)
 #include <linux/battery/fuelgauge/sm5705_fuelgauge.h>
-#else
+#elif !defined(CONFIG_SEC_FORTUNA_PROJECT)
 #include <linux/battery/sec_fuelgauge.h>
 #endif
 
@@ -347,14 +344,6 @@ void board_battery_init(struct platform_device *pdev, struct sec_battery_info *b
 	if ((!battery->pdata->temp_adc_table) &&
 			(battery->pdata->thermal_source == SEC_BATTERY_THERMAL_SOURCE_ADC)) {
 		pr_info("%s : assign temp adc table\n", __func__);
-#if defined(CONFIG_SEC_FORTUNA_PROJECT)
-		battery->pdata->temp_adc_table = temp_table;
-		battery->pdata->temp_amb_adc_table = temp_table;
-
-		battery->pdata->temp_adc_table_size = sizeof(temp_table)/sizeof(sec_bat_adc_table_data_t);
-		battery->pdata->temp_amb_adc_table_size = sizeof(temp_table)/sizeof(sec_bat_adc_table_data_t);
-#endif
-
 #if defined(CONFIG_SEC_E5_PROJECT)
 		pr_info("%s : E5 project, system_rev = %d\n", __func__, system_rev);
 		if(system_rev > 0x8){
@@ -408,8 +397,8 @@ void board_battery_init(struct platform_device *pdev, struct sec_battery_info *b
 		battery->pdata->chg_temp_adc_table_size = sizeof(chg_temp_table)/sizeof(sec_bat_adc_table_data_t);
 	}
 #endif
-
-#if defined(CONFIG_SEC_A3_PROJECT) || defined(CONFIG_SEC_A5_PROJECT) || defined(CONFIG_SEC_E5_PROJECT) || defined(CONFIG_SEC_E7_PROJECT) || defined(CONFIG_SEC_FORTUNA_PROJECT)
+#if defined(CONFIG_SEC_A3_PROJECT) || defined(CONFIG_SEC_A5_PROJECT) || defined(CONFIG_SEC_E5_PROJECT) || \
+	defined(CONFIG_SEC_E7_PROJECT) || defined(CONFIG_SEC_FORTUNA_PROJECT)
 	battery->pdata->temp_highlimit_threshold_event = TEMP_HIGHLIMIT_THRESHOLD_EVENT;
 	battery->pdata->temp_highlimit_recovery_event = TEMP_HIGHLIMIT_RECOVERY_EVENT;
 	battery->pdata->temp_highlimit_threshold_normal = TEMP_HIGHLIMIT_THRESHOLD_NORMAL;
@@ -429,19 +418,21 @@ void board_battery_init(struct platform_device *pdev, struct sec_battery_info *b
 	battery->pdata->temp_high_recovery_lpm = TEMP_HIGH_RECOVERY_LPM;
 	battery->pdata->temp_low_threshold_lpm = TEMP_LOW_THRESHOLD_LPM;
 	battery->pdata->temp_low_recovery_lpm = TEMP_LOW_RECOVERY_LPM;
+
 #if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	if (battery->pdata->temp_high_threshold_event !=
 		battery->pdata->temp_high_threshold_normal)
 		battery->pdata->event_check = true;
 #endif
+
 #if defined(CONFIG_BATTERY_SWELLING)
 	battery->swelling_temp_high_threshold = BATT_SWELLING_HIGH_TEMP_BLOCK;
 	battery->swelling_temp_high_recovery = BATT_SWELLING_HIGH_TEMP_RECOV;
 	battery->swelling_temp_low_threshold = BATT_SWELLING_LOW_TEMP_BLOCK;
 	battery->swelling_temp_low_recovery = BATT_SWELLING_LOW_TEMP_RECOV;
 	battery->swelling_recharge_voltage = BATT_SWELLING_RECHG_VOLTAGE;
-	battery->swelling_block_time = BATT_SWELLING_BLOCK_TIME;
 #endif
+
 #if defined(CONFIG_MACH_KOR_EARJACK_WR)
 	battery->earjack_wr_enable = (system_rev <= EARJACK_WR_SYSTEM_REV);
 	battery->earjack_wr_state = EARJACK_WR_NONE;
@@ -454,9 +445,15 @@ void board_battery_init(struct platform_device *pdev, struct sec_battery_info *b
 	adc_init_type(pdev, battery);
 }
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+void board_fuelgauge_init(struct sec_fuelgauge_info *fuelgauge)
+#else
 void board_fuelgauge_init(void * data)
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 {
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	if(data) {
+#endif
 #if defined(CONFIG_FUELGAUGE_MAX77849)
 		struct max77849_fuelgauge_info *fuelgauge =
 			(struct max77849_fuelgauge_info *)data;
@@ -465,25 +462,31 @@ void board_fuelgauge_init(void * data)
 			(struct sec_fuelgauge_info *)data;
 		fuelgauge->pdata->battery_data = stc3117_battery_data;
 #else
-#if !defined(CONFIG_FUELGAUGE_MAX77843)
+if !defined(CONFIG_FUELGAUGE_MAX77843) && !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	struct sec_fuelgauge_info *fuelgauge =
 		(struct sec_fuelgauge_info *)data;
 #endif
 #endif
 
 #if !defined(CONFIG_FUELGAUGE_MAX77843)
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	if(fuelgauge) {
+#endif
 		fuelgauge->pdata->capacity_max = CAPACITY_MAX;
 		fuelgauge->pdata->capacity_max_margin = CAPACITY_MAX_MARGIN;
 		fuelgauge->pdata->capacity_min = CAPACITY_MIN;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	}
+#endif
 #endif
 
 #if defined(CONFIG_SEC_GT58_PROJECT) || defined(CONFIG_SEC_GT510_PROJECT)
 		fuelgauge->pdata->temp_adc_table = temp_table;
 		fuelgauge->pdata->temp_adc_table_size = sizeof(temp_table)/sizeof(sec_bat_adc_table_data_t);
 #endif
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	}
+#endif
 }
 
 void cable_initial_check(struct sec_battery_info *battery)

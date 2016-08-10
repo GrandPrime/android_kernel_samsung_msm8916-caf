@@ -104,7 +104,6 @@ enum mdss_hw_index {
 	MDSS_HW_DSI1,
 	MDSS_HW_HDMI,
 	MDSS_HW_EDP,
-	MDSS_HW_IOMMU,
 	MDSS_MAX_HW_BLK
 };
 
@@ -124,10 +123,9 @@ struct mdss_data_type {
 	struct regulator *batfet;
 	u32 max_mdp_clk_rate;
 	struct mdss_util_intf *mdss_util;
-#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+
 	char __iomem *mdss_base;
 	size_t mdp_reg_size;
-#endif
 
 	struct platform_device *pdev;
 	struct dss_io_data mdss_io;

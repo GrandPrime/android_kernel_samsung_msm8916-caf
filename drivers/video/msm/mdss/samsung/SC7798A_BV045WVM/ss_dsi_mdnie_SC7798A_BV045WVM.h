@@ -39,6 +39,7 @@ Copyright (C) 2012, Samsung Electronics. All rights reserved.
 #define MDNIE_STEP1_INDEX 1
 #define MDNIE_STEP2_INDEX 2
 
+#if 0
 static char DSI0_NEGATIVE_MDNIE_CMDS[] ={
 	//start
 	0xE6,
@@ -155,6 +156,17 @@ static char DSI0_NEGATIVE_MDNIE_CMDS[] ={
 	0x04, //cc r1
 	0x00,
 };
+#endif
+static char DSI0_NEGATIVE_MDNIE_ON_CMDS[] ={
+	0x21,
+	0x00,
+};
+
+static char DSI0_NEGATIVE_MDNIE_OFF_CMDS[] ={
+	0x20,
+	0x00,
+};
+
 
 static char DSI0_UI_MDNIE_CMDS[] ={
 	//start
@@ -859,32 +871,39 @@ static char DSI0_GALLERY_MDNIE_CMDS[] ={
 };
 
 static struct dsi_cmd_desc DSI0_NEGATIVE_MDNIE[] = {
-	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(DSI0_NEGATIVE_MDNIE_CMDS)}, DSI0_NEGATIVE_MDNIE_CMDS},
+	{{DTYPE_DCS_LWRITE, 0, 0, 0, 0, sizeof(DSI0_NEGATIVE_MDNIE_OFF_CMDS)}, DSI0_NEGATIVE_MDNIE_OFF_CMDS},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(DSI0_NEGATIVE_MDNIE_ON_CMDS)}, DSI0_NEGATIVE_MDNIE_ON_CMDS},
 };
 
 ///////////////////////////////////////////////////////////////////////////////////
 
 static struct dsi_cmd_desc DSI0_UI_MDNIE[] = {
+	{{DTYPE_DCS_LWRITE, 0, 0, 0, 0, sizeof(DSI0_NEGATIVE_MDNIE_OFF_CMDS)}, DSI0_NEGATIVE_MDNIE_OFF_CMDS},
 	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(DSI0_UI_MDNIE_CMDS)}, DSI0_UI_MDNIE_CMDS},
 };
 
 static struct dsi_cmd_desc DSI0_VIDEO_MDNIE[] = {
+	{{DTYPE_DCS_LWRITE, 0, 0, 0, 0, sizeof(DSI0_NEGATIVE_MDNIE_OFF_CMDS)}, DSI0_NEGATIVE_MDNIE_OFF_CMDS},
 	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(DSI0_VIDEO_MDNIE_CMDS)}, DSI0_VIDEO_MDNIE_CMDS},
 };
 
 static struct dsi_cmd_desc DSI0_VIDEO_WARM_MDNIE[] = {
+	{{DTYPE_DCS_LWRITE, 0, 0, 0, 0, sizeof(DSI0_NEGATIVE_MDNIE_OFF_CMDS)}, DSI0_NEGATIVE_MDNIE_OFF_CMDS},
 	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(DSI0_VIDEO_WARM_MDNIE_CMDS)}, DSI0_VIDEO_WARM_MDNIE_CMDS},
 };
 
 static struct dsi_cmd_desc DSI0_VIDEO_COLD_MDNIE[] = {
+	{{DTYPE_DCS_LWRITE, 0, 0, 0, 0, sizeof(DSI0_NEGATIVE_MDNIE_OFF_CMDS)}, DSI0_NEGATIVE_MDNIE_OFF_CMDS},
 	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(DSI0_VIDEO_COLD_MDNIE_CMDS)}, DSI0_VIDEO_COLD_MDNIE_CMDS},
 };
 
 static struct dsi_cmd_desc DSI0_CAMERA_MDNIE[] = {
+	{{DTYPE_DCS_LWRITE, 0, 0, 0, 0, sizeof(DSI0_NEGATIVE_MDNIE_OFF_CMDS)}, DSI0_NEGATIVE_MDNIE_OFF_CMDS},
 	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(DSI0_CAMERA_MDNIE_CMDS)}, DSI0_CAMERA_MDNIE_CMDS},
 };
 
 static struct dsi_cmd_desc DSI0_GALLERY_MDNIE[] = {
+	{{DTYPE_DCS_LWRITE, 0, 0, 0, 0, sizeof(DSI0_NEGATIVE_MDNIE_OFF_CMDS)}, DSI0_NEGATIVE_MDNIE_OFF_CMDS},
 	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(DSI0_GALLERY_MDNIE_CMDS)}, DSI0_GALLERY_MDNIE_CMDS},
 };
 
@@ -914,6 +933,24 @@ static struct dsi_cmd_desc *mdnie_tune_value_dsi0[MAX_APP_MODE][MAX_MODE][MAX_OU
 			{DSI0_VIDEO_MDNIE,	NULL},
 			{DSI0_VIDEO_MDNIE,	NULL},
 			{DSI0_VIDEO_MDNIE,	NULL},
+		},
+		// VIDEO_WARM_APP
+		{
+			{NULL,	NULL},
+			{NULL,	NULL},
+			{NULL,	NULL},
+			{NULL,	NULL},
+			{NULL,	NULL},
+			{NULL,	NULL},
+		},
+		// VIDEO_COLD_APP
+		{
+			{NULL,	NULL},
+			{NULL,	NULL},
+			{NULL,	NULL},
+			{NULL,	NULL},
+			{NULL,	NULL},
+			{NULL,	NULL},
 		},
 		// CAMERA_APP
 		{

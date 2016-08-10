@@ -31,6 +31,7 @@ Copyright (C) 2012, Samsung Electronics. All rights reserved.
 */
 #include "ss_dsi_panel_SC7798A_BV045WVM.h"
 #include "ss_dsi_mdnie_SC7798A_BV045WVM.h"
+static int is_first_boot = 1;
 
 static int mdss_panel_on_pre(struct mdss_dsi_ctrl_pdata *ctrl)
 {
@@ -60,6 +61,12 @@ static int mdss_panel_on_post(struct mdss_dsi_ctrl_pdata *ctrl)
 	pr_info("%s %d\n", __func__, ctrl->ndx);
 
 	mdss_samsung_cabc_update();
+
+	if(is_first_boot){
+		if (ctrl->panel_data.set_backlight)
+			ctrl->panel_data.set_backlight(&ctrl->panel_data, LCD_DEFAUL_BL_LEVEL);
+		is_first_boot = 0;
+	}
 
 	return true;
 }
@@ -188,6 +195,7 @@ static void mdss_panel_init(struct samsung_display_driver_data *vdd)
 	pr_info("%s : %s", __func__, vdd->panel_name);
 
 	vdd->support_panel_max = SC7798A_BV045WVM_SUPPORT_PANEL_COUNT;
+	vdd->manufacture_id_dsi[vdd->support_panel_max - 1] = get_lcd_attached("GET");
 	vdd->support_mdnie_lite = true;
 	vdd->mdnie_tune_size1 = 113;
 	vdd->mdnie_tune_size2 = 0;
@@ -228,15 +236,13 @@ static void mdss_panel_init(struct samsung_display_driver_data *vdd)
 static int __init samsung_panel_init(void)
 {
 	struct samsung_display_driver_data *vdd = samsung_get_vdd();
-	//char panel_string[] = "ss_dsi_panel_SC7798A_BV045WVM_WVGA";
+	char panel_string[] = "ss_dsi_panel_SC7798A_BV045WVM_WVGA";
 
 	vdd->panel_name = mdss_mdp_panel + 8;
 	pr_info("%s : %s\n", __func__, vdd->panel_name);
 
-	//if (!strncmp(vdd->panel_name, panel_string, strlen(panel_string)))
+	if (!strncmp(vdd->panel_name, panel_string, strlen(panel_string)))
 		vdd->panel_func.samsung_panel_init = mdss_panel_init;
-	//else
-	//	vdd->panel_func.samsung_panel_init = NULL;
 
 	return 0;
 }

@@ -67,12 +67,6 @@ struct sec_jack_info {
 	bool buttons_enable;
 	struct platform_device *send_key_dev;
 	unsigned int cur_jack_type;
-#if defined (SEC_USE_SOC_JACK_API)
-	struct snd_soc_jack *headset_jack;
-	struct snd_soc_jack *button_jack;
-	int btn_state;
-	int hset_state;
-#endif	
 	struct timespec ts; 		/* Get Current time for KSND */
 	struct timespec ts_after;	/* Get Current time After Event */
 };
@@ -122,14 +116,6 @@ static struct gpio_event_platform_data sec_jack_input_data = {
 	.info = sec_jack_input_info,
 	.info_count = ARRAY_SIZE(sec_jack_input_info),
 };
-#if defined (SEC_USE_SOC_JACK_API)
-static struct snd_soc_jack hset_jack, btn_jack;
-static int sec_soc_btn[] = {
-	SND_JACK_BTN_0,
-	SND_JACK_BTN_1,
-	SND_JACK_BTN_2
-};
-#endif
 
 #if defined (SEC_HEADSET_ADC_ADJUST)
 #define ADC_PATH "data/data/com.sec.ksndtestmode/files/"
@@ -159,16 +145,6 @@ int ear_adc_value = 0;
 /*Enabling Ear Mic Bias of WCD Codec*/
 extern void msm8x16_enable_ear_micbias(bool state);
 
-#if defined(CONFIG_MACH_KOR_EARJACK_WR)
-extern void set_earjack_state(void);
-
-bool is_sec_earjack_on = false;
-bool sec_jack_onoff(void)
-{
-    return is_sec_earjack_on;
-}
-#endif
-
 static void sec_jack_gpio_init(struct sec_jack_platform_data *pdata)
 {
 	int ret;
@@ -192,6 +168,7 @@ static void sec_jack_gpio_init(struct sec_jack_platform_data *pdata)
 		}
 		gpio_direction_output(pdata->fsa_en_gpio, 1);
 	}
+
 
 }
 
@@ -368,9 +345,6 @@ static void sec_jack_set_type(struct sec_jack_info *hi, int jack_type)
 			sec_jack_write_data(hi, NULL);
 		}
 #endif /* SEC_HEADSET_ADC_ADJUST */
-#if defined (SEC_USE_SOC_JACK_API)
-		hi->hset_state = SND_JACK_HEADSET;
-#endif /* SEC_USE_SOC_JACK_API */
 	} else {
 		/* for all other jacks, disable send/end key detection */
 		if (hi->send_key_dev != NULL) {
@@ -382,22 +356,11 @@ static void sec_jack_set_type(struct sec_jack_info *hi, int jack_type)
 		}
 		/* micbias is left enabled for 4pole and disabled otherwise */
 		set_sec_micbias_state(hi, false);
-#if defined (SEC_USE_SOC_JACK_API)
-		if( jack_type == SEC_HEADSET_3POLE ){
-			hi->hset_state = SND_JACK_HEADPHONE;
-		} else {
-			hi->hset_state = 0;
-		}
-#endif /* SEC_USE_SOC_JACK_API */
 	}
 
 	hi->cur_jack_type = jack_type;
 	pr_info("%s : jack_type = %d\n", __func__, jack_type);
-#if defined (SEC_USE_SOC_JACK_API)
-	snd_soc_jack_report_no_dapm(hi->headset_jack, hi->hset_state, SND_JACK_HEADSET);
-#else /* SEC_USE_SOC_JACK_API */
 	switch_set_state(&switch_jack_detection, jack_type);
-#endif /* not SEC_USE_SOC_JACK_API */
 
 	/* Estimate Headset detection time */  //KSND
 	if( jack_type == SEC_HEADSET_4POLE || jack_type == SEC_HEADSET_3POLE ) {
@@ -407,10 +370,6 @@ static void sec_jack_set_type(struct sec_jack_info *hi, int jack_type)
 			--hi->ts.tv_sec;
 			hi->ts.tv_nsec += 1000000000L;
 		}
-#if defined(CONFIG_MACH_KOR_EARJACK_WR)
-		is_sec_earjack_on = true;
-		set_earjack_state();
-#endif
 		pr_info("%s: detect time : %d ms\n", __func__, (int)hi->ts.tv_nsec/1000000 );
 	}
 
@@ -469,10 +428,6 @@ static void determine_jack_type(struct sec_jack_info *hi)
 	/* jack removed before detection complete */
 	pr_debug("%s : jack removed before detection complete\n", __func__);
 	sec_jack_set_type(hi, SEC_JACK_NO_DEVICE);
-#if defined(CONFIG_MACH_KOR_EARJACK_WR)
-	is_sec_earjack_on = false;
-    set_earjack_state();
-#endif
 	set_sec_micbias_state(hi, false);
 }
 
@@ -911,9 +866,6 @@ void sec_jack_detect_work(struct work_struct *work)
 	unsigned npolarity = !hi->pdata->det_active_high;
 	int time_left_ms;
 
-#ifdef CONFIG_SAMSUNG_JACK_WATCH_DOG_RESET_WORK_AROUND
-        disable_irq(hi->det_irq);
-#endif /* CONFIG_SAMSUNG_JACK_WATCH_DOG_RESET_WORK_AROUND */
 	if (pdata->fsa_en_gpio < 0)
 		time_left_ms = DET_CHECK_TIME_MS;
 	else
@@ -936,14 +888,7 @@ void sec_jack_detect_work(struct work_struct *work)
 			/* restore micbias to 2.8V */
 			msm8x16_wcd_dynamic_control_micbias(MIC_BIAS_V2P80V);
 #endif
-#if defined(CONFIG_MACH_KOR_EARJACK_WR)
-			is_sec_earjack_on = false;
-			set_earjack_state();
-#endif
 			set_sec_micbias_state(hi, false);
-#ifdef CONFIG_SAMSUNG_JACK_WATCH_DOG_RESET_WORK_AROUND
-                       enable_irq(hi->det_irq);
-#endif /* CONFIG_SAMSUNG_JACK_WATCH_DOG_RESET_WORK_AROUND */
 			return;
 		}
 		usleep_range(10000, 10000);
@@ -957,10 +902,6 @@ void sec_jack_detect_work(struct work_struct *work)
 	if (hi->cur_jack_type == SEC_HEADSET_4POLE)
 		msm8x16_wcd_dynamic_control_micbias(MIC_BIAS_V2P20V);
 #endif
-
-#ifdef CONFIG_SAMSUNG_JACK_WATCH_DOG_RESET_WORK_AROUND
-       enable_irq(hi->det_irq);
-#endif /* CONFIG_SAMSUNG_JACK_WATCH_DOG_RESET_WORK_AROUND */
 }
 
 /* thread run whenever the button of headset is pressed or released */
@@ -997,15 +938,9 @@ void sec_jack_buttons_work(struct work_struct *work)
 		if (!is_mic_enable())
 			msm8x16_wcd_dynamic_control_micbias(MIC_BIAS_V2P20V);
 #endif
-#if defined (SEC_USE_SOC_JACK_API)
-		hi->button_jack->jack->type = hi->btn_state;
-		snd_soc_jack_report_no_dapm(hi->button_jack, 0, SEC_JACK_BUTTON_MASK);
-		hi->button_jack->jack->type = SEC_JACK_BUTTON_MASK;
-#else /* SEC_USE_SOC_JACK_API */
 		input_report_key(hi->input_dev, hi->pressed_code, 0);
 		input_sync(hi->input_dev);
 		switch_set_state(&switch_sendend, 0);
-#endif /* not SEC_USE_SOC_JACK_API */
 		pr_info("%s: BTN %d is released\n", __func__,
 			hi->pressed_code);
 		return;
@@ -1025,15 +960,9 @@ void sec_jack_buttons_work(struct work_struct *work)
 		if (adc >= btn_zones[i].adc_low &&
 			adc <= btn_zones[i].adc_high) {
 			hi->pressed_code = btn_zones[i].code;
-#if defined (SEC_USE_SOC_JACK_API)
-			hi->btn_state = sec_soc_btn[i];
-			snd_soc_jack_report_no_dapm(hi->button_jack,
-							hi->btn_state, SEC_JACK_BUTTON_MASK);
-#else /* SEC_USE_SOC_JACK_API */
 			input_report_key(hi->input_dev, btn_zones[i].code, 1);
 			input_sync(hi->input_dev);
 			switch_set_state(&switch_sendend, 1);
-#endif /* not SEC_USE_SOC_JACK_API */
 			pr_info("%s: adc = %d, BTN %d is pressed\n", __func__,
 				adc, btn_zones[i].code);
 			return;
@@ -1170,28 +1099,6 @@ static int sec_jack_pinctrl_configure(struct sec_jack_platform_data *pdata, bool
 	return 0;
 }
 
-#if defined (SEC_USE_SOC_JACK_API)
-int sec_jack_soc_init(struct snd_soc_card *card)
-{
-	int ret;
-	struct snd_soc_codec *codec = card->rtd[0].codec;
-
-	ret = snd_soc_jack_new(codec, "Headset Jack", SND_JACK_HEADSET, &hset_jack);
-	if (ret)
-		return ret;
-
-	ret = snd_soc_jack_new(codec, "Button Jack", SEC_JACK_BUTTON_MASK, &btn_jack);
-	if (ret)
-		return ret;
-
-	snd_jack_set_key(btn_jack.jack, SND_JACK_BTN_0, KEY_MEDIA);
-	snd_jack_set_key(btn_jack.jack, SND_JACK_BTN_1, KEY_VOLUMEUP);
-	snd_jack_set_key(btn_jack.jack, SND_JACK_BTN_2, KEY_VOLUMEDOWN);
-
-	return 0;
-}
-EXPORT_SYMBOL(sec_jack_soc_init);
-#endif /* SEC_USE_SOC_JACK_API */
 
 extern bool is_codec_probe_done(void);
 
@@ -1363,12 +1270,6 @@ static int sec_jack_probe(struct platform_device *pdev)
 	hi->handler.name = "sec_jack_buttons";
 	hi->handler.id_table = hi->ids;
 	hi->handler.private = hi;
-#if defined (SEC_USE_SOC_JACK_API)
-	hi->headset_jack = &hset_jack;
-	hi->button_jack = &btn_jack;
-	hi->btn_state = 0;
-	hi->hset_state = 0;
-#endif /* SEC_USE_SOC_JACK_API */
 	ret = input_register_handler(&hi->handler);
 	if (ret) {
 		pr_err("%s : Failed to register_handler\n", __func__);
@@ -1471,6 +1372,7 @@ static int sec_jack_suspend(struct device *dev)
 			dev_err(dev, "failed to put the pin in suspend state\n");
 		}
 	}
+
 	return 0;
 }
 
@@ -1484,6 +1386,7 @@ static int sec_jack_resume(struct device *dev)
 			dev_err(dev, "failed to put the pin in resume state\n");
 		}
 	}
+	
 	return 0;
 }
 

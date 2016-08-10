@@ -9,7 +9,7 @@
 #include <linux/io.h>
 #include <linux/types.h>
 
-#define DEBUG_LOG_START (0x85D80000)
+#define DEBUG_LOG_START (0x85F80000)
 //#endif
 
 #define	DEBUG_LOG_SIZE	(1<<19)

@@ -150,6 +150,7 @@ struct qpnp_pon_config {
 	u16 s2_cntl2_addr;
 	bool old_state;
 	bool use_bark;
+	bool switch_powerkey;
 };
 
 struct qpnp_pon {
@@ -532,10 +533,15 @@ qpnp_pon_input_dispatch(struct qpnp_pon *pon, u32 pon_type)
 	struct qpnp_pon_config *cfg = NULL;
 	u8 pon_rt_sts = 0, pon_rt_bit = 0;
 	u32 key_status;
-
+	int pwr_key;
 	cfg = qpnp_get_cfg(pon, pon_type);
 	if (!cfg)
 		return -EINVAL;
+
+	if (cfg->switch_powerkey)
+		pwr_key = KEY_END;
+	else
+		pwr_key = 116;
 
 	/* Check if key reporting is supported */
 	if (!cfg->key_code)
@@ -602,9 +608,9 @@ qpnp_pon_input_dispatch(struct qpnp_pon *pon, u32 pon_type)
 		printk(KERN_INFO "%s: PWR key is %s\n",
 				__func__, (pon_rt_sts & pon_rt_bit) ? "pressed" : "released");
 
-	if((cfg->key_code == 116) && (pon_rt_sts & pon_rt_bit)){
+	if((cfg->key_code == pwr_key) && (pon_rt_sts & pon_rt_bit)){
 		pon->powerkey_state = 1;
-	}else if((cfg->key_code == 116) && !(pon_rt_sts & pon_rt_bit)){
+	}else if((cfg->key_code == pwr_key) && !(pon_rt_sts & pon_rt_bit)){
 		pon->powerkey_state = 0;
 	}
 
@@ -623,6 +629,9 @@ qpnp_pon_input_dispatch(struct qpnp_pon *pon, u32 pon_type)
 		sec_debug_check_crash_key(cfg->key_code, pon->resin_state);
 	else
 #endif /* CONFIG_QPNP_RESIN */
+	if (cfg->switch_powerkey && cfg->key_code == KEY_END)
+		sec_debug_check_crash_key(116, key_status);
+	else
 		sec_debug_check_crash_key(cfg->key_code, pon->powerkey_state);
 #endif /* CONFIG_SEC_DEBUG */
 
@@ -895,6 +904,7 @@ qpnp_config_reset(struct qpnp_pon *pon, struct qpnp_pon_config *cfg)
 		dev_err(&pon->spmi->dev, "Unable to configure S2 timer\n");
 		return rc;
 	}
+
 #ifdef CONFIG_SEC_DEBUG
 	/* Configure reset type:
 	 * Debug level MID/HIGH: WARM Reset
@@ -906,6 +916,7 @@ qpnp_config_reset(struct qpnp_pon *pon, struct qpnp_pon_config *cfg)
 		cfg->s2_type = 8;
 	}
 #endif
+
 	rc = qpnp_pon_masked_write(pon, cfg->s2_cntl_addr,
 				QPNP_PON_S2_CNTL_TYPE_MASK, (u8)cfg->s2_type);
 	if (rc) {
@@ -1366,6 +1377,8 @@ static int qpnp_pon_config_init(struct qpnp_pon *pon)
 			dev_err(&pon->spmi->dev, "Unable to read pull-up\n");
 			return rc;
 		}
+		/* swtich bool for key_end to powerkey */
+		cfg->switch_powerkey = of_property_read_bool(pp, "switch_powerkey");
 	}
 
 	pmic_wd_bark_irq = spmi_get_irq_byname(pon->spmi, NULL, "pmic-wd-bark");
@@ -1926,7 +1939,11 @@ static int __init qpnp_pon_init(void)
 {
 	return spmi_driver_register(&qpnp_pon_driver);
 }
+#ifdef CONFIG_ARCH_MSM8916
+subsys_initcall(qpnp_pon_init);
+#else
 module_init(qpnp_pon_init);
+#endif
 
 static void __exit qpnp_pon_exit(void)
 {

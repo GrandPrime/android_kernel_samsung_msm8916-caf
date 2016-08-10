@@ -161,7 +161,11 @@ static void fc8080_power_off(void)
 	}
 }
 
+#ifdef CONFIG_TDMB_XTAL_FREQ
 static bool fc8080_power_on(int param)
+#else
+static bool fc8080_power_on(void)
+#endif
 {
 	DPRINTK("%s\n", __func__);
 
