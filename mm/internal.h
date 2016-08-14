@@ -229,7 +229,7 @@ static inline void mlock_migrate_page(struct page *newpage, struct page *page)
 
 extern pmd_t maybe_pmd_mkwrite(pmd_t pmd, struct vm_area_struct *vma);
 
-#ifdef CONFIG_TRANSPARENT_HUGEPAGE || !defined(CONFIG_SEC_FORTUNA_PROJECT)
+#if defined(CONFIG_TRANSPARENT_HUGEPAGE) || !defined(CONFIG_SEC_FORTUNA_PROJECT)
 extern unsigned long vma_address(struct page *page,
 				 struct vm_area_struct *vma);
 #endif

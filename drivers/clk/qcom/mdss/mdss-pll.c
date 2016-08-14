@@ -25,8 +25,10 @@
 #include "mdss-edp-pll.h"
 #include "mdss-dsi-pll.h"
 #include "mdss-hdmi-pll.h"
-#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG) && !defined(CONFIG_SEC_FORTUNA_PROJECT)
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
 #include "../../../video/msm/mdss/samsung/ss_dsi_panel_common.h" /* UTIL HEADER */
+#endif
 #endif
 
 int mdss_pll_resource_enable(struct mdss_pll_resources *pll_res, bool enable)
@@ -212,8 +214,10 @@ static int mdss_pll_probe(struct platform_device *pdev)
 	struct resource *dynamic_pll_base_reg;
 	struct resource *gdsc_base_reg;
 	struct mdss_pll_resources *pll_res;
-#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG) && !defined(CONFIG_SEC_FORTUNA_PROJECT)
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
 	struct samsung_display_driver_data *vdd = samsung_get_vdd();
+#endif
 #endif
 
 	if (!pdev->dev.of_node) {
@@ -260,9 +264,11 @@ static int mdss_pll_probe(struct platform_device *pdev)
 		goto io_error;
 	}
 
-#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG) && !defined(CONFIG_SEC_FORTUNA_PROJECT)
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
 	if (!strcmp(label, "MDSS DSI 0 PLL") || !strcmp(label, "MDSS DSI 1 PLL"))
 		vdd->dump_info[pll_res->index].dsi_pll.virtual_addr = (size_t)pll_res->pll_base;
+#endif
 #endif
 
 	rc = mdss_pll_resource_parse(pdev, pll_res);

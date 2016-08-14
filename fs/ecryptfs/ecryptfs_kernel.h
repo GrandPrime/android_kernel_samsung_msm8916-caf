@@ -662,7 +662,9 @@ extern const struct inode_operations ecryptfs_main_iops;
 extern const struct inode_operations ecryptfs_dir_iops;
 extern const struct inode_operations ecryptfs_symlink_iops;
 extern const struct super_operations ecryptfs_sops;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 extern const struct super_operations ecryptfs_multimount_sops;
+#endif
 extern const struct dentry_operations ecryptfs_dops;
 extern const struct address_space_operations ecryptfs_aops;
 extern int ecryptfs_verbosity;
@@ -732,10 +734,12 @@ int ecryptfs_generate_key_packet_set(char *dest_base,
 int
 ecryptfs_parse_packet_set(struct ecryptfs_crypt_stat *crypt_stat,
 			  unsigned char *src, struct dentry *ecryptfs_dentry);
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 /* Do not directly use this function. Use ECRYPTFS_OVERRIDE_CRED() instead. */
 const struct cred * ecryptfs_override_fsids(uid_t fsuid, gid_t fsgid);
 /* Do not directly use this function, use ECRYPTFS_REVERT_CRED() instead. */
 void ecryptfs_revert_fsids(const struct cred * old_cred);
+#endif
 
 int ecryptfs_truncate(struct dentry *dentry, loff_t new_length);
 ssize_t

@@ -654,8 +654,10 @@ static int sec_nfc_suspend(struct device *dev)
 #endif
 	int ret = 0;
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	dev_dbg(info->dev, "%s\n", __func__);
 	pr_info("[NFC] %s\n", __func__);
+#endif
 #ifdef CONFIG_SEC_NFC_CLK_ALWAYS_ENABLE
 	if (info->clk_state){
 		pr_info("[NFC] %s : clk_disable_unprepare \n", __func__);

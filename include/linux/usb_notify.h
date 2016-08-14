@@ -25,28 +25,38 @@ enum otg_notify_events {
 	NOTIFY_EVENT_MMDOCK,
 	NOTIFY_EVENT_HMT,
 	NOTIFY_EVENT_DRIVE_VBUS,
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	NOTIFY_EVENT_DISABLE_NOTIFY,
+#else
 	NOTIFY_EVENT_ALLDISABLE_NOTIFY,
 	NOTIFY_EVENT_HOSTDISABLE_NOTIFY,
 	NOTIFY_EVENT_CLIENTDISABLE_NOTIFY,
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	NOTIFY_EVENT_OVERCURRENT,
 	NOTIFY_EVENT_SMSC_OVC,
 	NOTIFY_EVENT_SMTD_EXT_CURRENT,
 	NOTIFY_EVENT_MMD_EXT_CURRENT,
 	NOTIFY_EVENT_VBUSPOWER,
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	NOTIFY_EVENT_VIRTUAL,
+#endif
 };
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 #define VIRT_EVENT(a) (a+NOTIFY_EVENT_VIRTUAL)
 #define PHY_EVENT(a) (a%NOTIFY_EVENT_VIRTUAL)
 #define IS_VIRTUAL(a) (a >= NOTIFY_EVENT_VIRTUAL ? 1 : 0)
+#endif
 
 enum otg_notify_event_status {
 	NOTIFY_EVENT_DISABLED,
 	NOTIFY_EVENT_DISABLING,
 	NOTIFY_EVENT_ENABLED,
 	NOTIFY_EVENT_ENABLING,
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	NOTIFY_EVENT_BLOCKED,
 	NOTIFY_EVENT_BLOCKING,
+#endif
 };
 
 enum otg_notify_evt_type {
@@ -56,16 +66,20 @@ enum otg_notify_evt_type {
 	NOTIFY_EVENT_NEED_VBUSDRIVE = (1 << 3),
 	NOTIFY_EVENT_NOBLOCKING = (1 << 4),
 	NOTIFY_EVENT_NOSAVE = (1 << 5),
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	NOTIFY_EVENT_NEED_HOST = (1 << 6),
 	NOTIFY_EVENT_NEED_CLIENT = (1 << 7),
+#endif
 };
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 enum otg_notify_block_type {
 	NOTIFY_BLOCK_TYPE_NONE = 0,
 	NOTIFY_BLOCK_TYPE_HOST = (1 << 0),
 	NOTIFY_BLOCK_TYPE_CLIENT = (1 << 1),
 	NOTIFY_BLOCK_TYPE_ALL = (1 << 0 | 1 << 1),
 };
+#endif
 
 enum otg_notify_gpio {
 	NOTIFY_VBUS,
@@ -90,10 +104,10 @@ struct otg_notify {
 	int booting_delay_sec;
 	int disable_control;
 	const char *muic_name;
-	int (*pre_gpio)(int gpio, int use);
-	int (*post_gpio)(int gpio, int use);
-	int (*vbus_drive)(bool);
-	int (*set_host)(bool);
+	int (*pre_gpio) (int gpio, int use);
+	int (*post_gpio) (int gpio, int use);
+	int (*vbus_drive) (bool);
+	int (*set_host) (bool);
 	int (*set_peripheral)(bool);
 	int (*set_charger)(bool);
 	int (*post_vbus_detect)(bool);
@@ -104,7 +118,7 @@ struct otg_notify {
 
 struct otg_booster {
 	char *name;
-	int (*booster)(bool);
+	int (*booster) (bool);
 };
 
 #ifdef CONFIG_USB_NOTIFY_LAYER

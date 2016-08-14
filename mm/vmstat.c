@@ -1277,8 +1277,12 @@ int sysctl_stat_interval __read_mostly = HZ;
 static void vmstat_update(struct work_struct *w)
 {
 	refresh_cpu_vm_stats(smp_processor_id());
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	schedule_delayed_work(&__get_cpu_var(vmstat_work),
+#else
 	schedule_delayed_work_on(smp_processor_id(),
 		&__get_cpu_var(vmstat_work),
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 		round_jiffies_relative(sysctl_stat_interval));
 }
 

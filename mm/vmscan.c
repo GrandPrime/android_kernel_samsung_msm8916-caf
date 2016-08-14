@@ -44,6 +44,9 @@
 #include <linux/oom.h>
 #include <linux/prefetch.h>
 #include <linux/debugfs.h>
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+#include <linux/fs.h>
+#endif
 
 #include <asm/tlbflush.h>
 #include <asm/div64.h>
@@ -90,6 +93,8 @@ struct scan_control {
 
 	int order;
 
+	int swappiness;
+
 	/* Scan (total_size >> priority) pages at once */
 	int priority;
 
@@ -105,15 +110,18 @@ struct scan_control {
 	 */
 	nodemask_t	*nodemask;
 
-#ifdef CONFIG_RUNTIME_COMPCACHE
-	struct rtcc_control *rc;
-#endif /* CONFIG_RUNTIME_COMPCACHE */
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	/*
 	 * Reclaim pages from a vma. If the page is shared by other tasks
 	 * it is zapped from a vma without reclaim so it ends up remaining
 	 * on memory until last task zap it.
 	 */
 	struct vm_area_struct *target_vma;
+#endif
+
+#ifdef CONFIG_RUNTIME_COMPCACHE
+	struct rtcc_control *rc;
+#endif /* CONFIG_RUNTIME_COMPCACHE */
 };
 
 #define lru_to_page(_head) (list_entry((_head)->prev, struct page, lru))
@@ -318,7 +326,7 @@ unsigned long shrink_slab(struct shrink_control *shrink,
 
 	list_for_each_entry(shrinker, &shrinker_list, list) {
 		unsigned long long delta;
-		long total_scan;
+		long total_scan, pages_got;
 		long max_pass;
 		int shrink_ret = 0;
 		long nr;
@@ -391,10 +399,14 @@ unsigned long shrink_slab(struct shrink_control *shrink,
 							batch_size);
 			if (shrink_ret == -1)
 				break;
-			if (shrink_ret < nr_before)
-				ret += nr_before - shrink_ret;
+			if (shrink_ret < nr_before) {
+				pages_got = nr_before - shrink_ret;
+				ret += pages_got;
+				total_scan -= pages_got > batch_size ? pages_got : batch_size;
+			} else {
+				total_scan -= batch_size;
+			}
 			count_vm_events(SLABS_SCANNED, batch_size);
-			total_scan -= batch_size;
 
 			cond_resched();
 		}
@@ -831,7 +843,11 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 		struct address_space *mapping;
 		struct page *page;
 		int may_enter_fs;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+		enum page_references references = PAGEREF_RECLAIM_CLEAN;
+#else
 		enum page_references references = PAGEREF_RECLAIM;
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 		bool dirty, writeback;
 
 		cond_resched();
@@ -843,7 +859,9 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 			goto keep;
 
 		VM_BUG_ON(PageActive(page));
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 		if (zone)
+#endif
 			VM_BUG_ON(page_zone(page) != zone);
 
 		sc->nr_scanned++;
@@ -988,8 +1006,12 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 		 * processes. Try to unmap it here.
 		 */
 		if (page_mapped(page) && mapping) {
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+			switch (try_to_unmap(page, ttu_flags)) {
+#else
 			switch (try_to_unmap(page,
 					ttu_flags, sc->target_vma)) {
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 			case SWAP_FAIL:
 				goto activate_locked;
 			case SWAP_AGAIN:
@@ -1009,7 +1031,11 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 			 */
 			if (page_is_file_cache(page) &&
 					(!current_is_kswapd() ||
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+					 !zone_is_reclaim_dirty(zone))) {
+#else
 				(zone && !zone_is_reclaim_dirty(zone)))) {
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 				/*
 				 * Immediately reclaim when written back.
 				 * Similar in principal to deactivate_page()
@@ -1116,6 +1142,7 @@ free_it:
 		 * appear not as the counts should be low
 		 */
 		list_add(&page->lru, &free_pages);
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 		/*
 		 * If pagelist are from multiple zones, we should decrease
 		 * NR_ISOLATED_ANON + x on freed pages in here.
@@ -1123,18 +1150,27 @@ free_it:
 		if (!zone)
 			dec_zone_page_state(page, NR_ISOLATED_ANON +
 					page_is_file_cache(page));
+#endif
 		continue;
 
 cull_mlocked:
 		if (PageSwapCache(page))
 			try_to_free_swap(page);
 		unlock_page(page);
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 		putback_lru_page(page);
+#else
+		list_add(&page->lru, &ret_pages);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 		continue;
 
 activate_locked:
 		/* Not a candidate for swapping, so reclaim swap space. */
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+		if (PageSwapCache(page) && vm_swap_full())
+#else
 		if (PageSwapCache(page) && vm_swap_full(page_swap_info(page)))
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 			try_to_free_swap(page);
 		VM_BUG_ON(PageActive(page));
 		SetPageActive(page);
@@ -1166,8 +1202,10 @@ unsigned long reclaim_clean_pages_from_list(struct zone *zone,
 		.gfp_mask = GFP_KERNEL,
 		.priority = DEF_PRIORITY,
 		.may_unmap = 1,
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 		/* Doesn't allow to write out dirty page */
 		.may_writepage = 0,
+#endif
 	};
 	unsigned long ret, dummy1, dummy2, dummy3, dummy4, dummy5;
 	struct page *page, *next;
@@ -1185,7 +1223,11 @@ unsigned long reclaim_clean_pages_from_list(struct zone *zone,
 			TTU_UNMAP|TTU_IGNORE_ACCESS,
 			&dummy1, &dummy2, &dummy3, &dummy4, &dummy5, true);
 	list_splice(&clean_pages, page_list);
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	__mod_zone_page_state(zone, NR_ISOLATED_FILE, -ret);
+#else
+	mod_zone_page_state(zone, NR_ISOLATED_FILE, -ret);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	return ret;
 }
 
@@ -1415,6 +1457,19 @@ static int __too_many_isolated(struct zone *zone, int file,
 {
 	unsigned long inactive, isolated;
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+#ifdef CONFIG_RUNTIME_COMPCACHE
+	if (get_rtcc_status() == 1)
+		return 0;
+#endif /* CONFIG_RUNTIME_COMPCACHE */
+
+	if (current_is_kswapd())
+		return 0;
+
+	if (!global_reclaim(sc))
+		return 0;
+#endif
+
 	if (file) {
 		if (safe) {
 			inactive = zone_page_state_snapshot(zone,
@@ -1458,11 +1513,6 @@ static int __too_many_isolated(struct zone *zone, int file,
 static int too_many_isolated(struct zone *zone, int file,
 		struct scan_control *sc, int safe)
 {
-#ifdef CONFIG_RUNTIME_COMPCACHE
-	if (get_rtcc_status() == 1)
-		return 0;
-#endif /* CONFIG_RUNTIME_COMPCACHE */
-
 	if (current_is_kswapd())
 		return 0;
 
@@ -1943,7 +1993,7 @@ static int vmscan_swappiness(struct scan_control *sc)
 		return sc->rc->swappiness;
 #endif /* CONFIG_RUNTIME_COMPCACHE */
 	if (global_reclaim(sc))
-		return vm_swappiness;
+		return sc->swappiness;
 	return mem_cgroup_swappiness(sc->target_mem_cgroup);
 }
 
@@ -2185,8 +2235,10 @@ static void shrink_lruvec(struct lruvec *lruvec, struct scan_control *sc)
 			if (rc->nr_swapped >= rc->nr_anon)
 				nr[LRU_INACTIVE_ANON] = nr[LRU_ACTIVE_ANON] = 0;
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 			if ((sc->nr_reclaimed + nr_reclaimed - rc->nr_swapped) >= rc->nr_file)
 				nr[LRU_INACTIVE_FILE] = nr[LRU_ACTIVE_FILE] = 0;
+#endif
 		}
 #endif /* CONFIG_RUNTIME_COMPCACHE */
 
@@ -2787,6 +2839,11 @@ unsigned long try_to_free_pages(struct zonelist *zonelist, int order,
 #else
 		.may_swap = 1,
 #endif /* CONFIG_RUNTIME_COMPCACHE */
+#ifdef CONFIG_ZSWAP
+		.swappiness = vm_swappiness / 2,
+#else
+		.swappiness = vm_swappiness,
+#endif
 		.order = order,
 		.priority = DEF_PRIORITY,
 		.target_mem_cgroup = NULL,
@@ -2829,6 +2886,7 @@ unsigned long mem_cgroup_shrink_node_zone(struct mem_cgroup *memcg,
 		.may_unmap = 1,
 		.may_swap = !noswap,
 		.order = 0,
+		.swappiness = vm_swappiness,
 		.priority = 0,
 		.target_mem_cgroup = memcg,
 	};
@@ -2869,6 +2927,7 @@ unsigned long try_to_free_mem_cgroup_pages(struct mem_cgroup *memcg,
 		.may_swap = !noswap,
 		.nr_to_reclaim = SWAP_CLUSTER_MAX,
 		.order = 0,
+		.swappiness = vm_swappiness,
 		.priority = DEF_PRIORITY,
 		.target_mem_cgroup = memcg,
 		.nodemask = NULL, /* we don't care the placement */
@@ -2987,7 +3046,11 @@ static bool pgdat_balanced(pg_data_t *pgdat, int order, int classzone_idx)
 	}
 
 	if (order)
+#ifdef CONFIG_TIGHT_PGDAT_BALANCE
+		return balanced_pages >= (managed_pages >> 1);
+#else
 		return balanced_pages >= (managed_pages >> 2);
+#endif
 	else
 		return true;
 }
@@ -3143,6 +3206,7 @@ static unsigned long balance_pgdat(pg_data_t *pgdat, int order,
 #endif /* CONFIG_KSWAPD_NOSWAP */
 		.may_writepage = !laptop_mode,
 		.order = order,
+		.swappiness = vm_swappiness,
 		.target_mem_cgroup = NULL,
 	};
 	count_vm_event(PAGEOUTRUN);
@@ -3343,11 +3407,15 @@ static void kswapd_try_to_sleep(pg_data_t *pgdat, int order, int classzone_idx)
 	 * go fully to sleep until explicitly woken up.
 	 */
 	if (prepare_kswapd_sleep(pgdat, order, remaining, classzone_idx)) {
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 		trace_mm_vmscan_kswapd_sleep(pgdat->node_id);
-
+#endif
 #ifdef CONFIG_RUNTIME_COMPCACHE
 		atomic_set(&kswapd_running, 0);
 #endif /* CONFIG_RUNTIME_COMPCACHE */
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+		trace_mm_vmscan_kswapd_sleep(pgdat->node_id);
+#endif
 
 		/*
 		 * vmstat counters are not perfectly accurate and the estimated
@@ -3684,6 +3752,7 @@ unsigned long shrink_all_memory(unsigned long nr_to_reclaim)
 		.nr_to_reclaim = nr_to_reclaim,
 		.hibernation_mode = 1,
 		.order = 0,
+		.swappiness = vm_swappiness,
 		.priority = DEF_PRIORITY,
 	};
 	struct shrink_control shrink = {
@@ -3877,6 +3946,7 @@ static int __zone_reclaim(struct zone *zone, gfp_t gfp_mask, unsigned int order)
 		.nr_to_reclaim = max(nr_pages, SWAP_CLUSTER_MAX),
 		.gfp_mask = (gfp_mask = memalloc_noio_flags(gfp_mask)),
 		.order = order,
+		.swappiness = vm_swappiness,
 		.priority = ZONE_RECLAIM_PRIORITY,
 	};
 	struct shrink_control shrink = {

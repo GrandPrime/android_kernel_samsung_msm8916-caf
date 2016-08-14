@@ -400,12 +400,18 @@ static ssize_t secgpio_checked_sleepgpio_read(
 
 void gpio_dvs_check_initgpio(void)
 {
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	pr_info("%s\n",__func__);
+#endif
 	if (gdvs_info && gdvs_info->check_gpio_status)
 		gdvs_info->check_gpio_status(PHONE_INIT);
 }
 
 void gpio_dvs_check_sleepgpio(void)
 {
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	pr_info("%s\n",__func__);
+#endif
 	if (unlikely(!gdvs_info->check_sleep)) {
 		gdvs_info->check_gpio_status(PHONE_SLEEP);
 		gdvs_info->check_sleep = true;

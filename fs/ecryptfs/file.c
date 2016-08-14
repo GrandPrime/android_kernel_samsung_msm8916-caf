@@ -599,7 +599,7 @@ ecryptfs_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	rc = ecryptfs_do_sdp_ioctl(file, cmd, arg);
 	if (rc != EOPNOTSUPP)
 		return rc;
-#else
+#elif !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	printk("%s CONFIG_SDP not enabled \n", __func__);
 #endif
 
@@ -621,7 +621,7 @@ ecryptfs_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	rc = ecryptfs_do_sdp_ioctl(file, cmd, arg);
 	if (rc != EOPNOTSUPP)
 		return rc;
-#else
+#elif !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	printk("%s CONFIG_SDP not enabled \n", __func__);
 #endif
 
@@ -645,7 +645,12 @@ int is_file_name_match(struct ecryptfs_mount_crypt_stat *mcs,
 	str = kzalloc(mcs->max_name_filter_len + 1, GFP_KERNEL);
 	if (!str) {
 		printk(KERN_ERR "%s: Out of memory whilst attempting "
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+			       "to kzalloc [%zd] bytes\n", __func__,
+#else
 			       "to kzalloc [%d] bytes\n", __func__,
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
+
 			       (mcs->max_name_filter_len + 1));
 		return 0;
 	}

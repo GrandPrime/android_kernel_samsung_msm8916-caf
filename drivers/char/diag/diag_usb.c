@@ -209,7 +209,11 @@ static void diag_usb_write_done(struct diag_usb_info *ch,
 	ch->write_cnt++;
 	ctxt = (int)(uintptr_t)req->context;
 	if (ch->ops && ch->ops->write_done)
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 		ch->ops->write_done(req->buf, req->actual, ctxt, DIAG_USB_MODE);
+#else
+		ch->ops->write_done(req->buf, req->actual, ctxt, ch->ctxt);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	diagmem_free(driver, req, ch->mempool);
 	queue_work(ch->usb_wq, &(ch->read_work));
 }

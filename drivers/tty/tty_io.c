@@ -2569,6 +2569,7 @@ static int tiocsetd(struct tty_struct *tty, int __user *p)
 	return ret;
 }
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 /**
  *	tiocgetd	-	get line discipline
  *	@tty: tty device
@@ -2590,7 +2591,7 @@ static int tiocgetd(struct tty_struct *tty, int __user *p)
 	tty_ldisc_deref(ld);
 	return ret;
 }
-
+#endif
 
 /**
  *	send_break	-	performed time break
@@ -2809,7 +2810,11 @@ long tty_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case TIOCGSID:
 		return tiocgsid(tty, real_tty, p);
 	case TIOCGETD:
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 		return tiocgetd(tty, p);
+#else
+		return put_user(tty->ldisc->ops->num, (int __user *)p);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	case TIOCSETD:
 		return tiocsetd(tty, p);
 	case TIOCVHANGUP:

@@ -207,5 +207,7 @@ static inline int msm_tlmm_of_gp_irq_init(struct device_node *np,
 }
 #endif
 #endif
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 void msm_tlmm_v4_gp_show_resume_irq(void);
+#endif
 #endif

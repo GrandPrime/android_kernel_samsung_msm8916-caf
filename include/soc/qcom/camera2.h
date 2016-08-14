@@ -16,6 +16,13 @@
 
 #include <media/msm_cam_sensor.h>
 #include <mach/board.h>
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+#include <linux/interrupt.h>
+#include <linux/of_platform.h>
+#include <linux/of_device.h>
+#include <linux/of.h>
+#define MAX_SPECIAL_SUPPORT_SIZE 10
+#endif
 
 enum msm_camera_device_type_t {
 	MSM_CAMERA_I2C_DEVICE,
@@ -89,6 +96,10 @@ struct msm_camera_sensor_board_info {
 	const char *sensor_name;
 	const char *eeprom_name;
 	const char *actuator_name;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	const char *special_support_sensors[MAX_SPECIAL_SUPPORT_SIZE];
+	int32_t special_support_size;
+#endif
 	struct msm_camera_slave_info *slave_info;
 	struct msm_camera_csi_lane_params *csi_lane_params;
 	struct msm_camera_sensor_strobe_flash_data *strobe_flash_data;

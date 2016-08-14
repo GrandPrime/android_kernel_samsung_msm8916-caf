@@ -865,7 +865,9 @@ out:
 	 * not get flushed and deadlock is not a concern.
 	 */
 	pr_err("%s", buf);
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	if (console_null_state)
+#endif
 		BUG();
 #else
 	printk_sched("%s", buf);

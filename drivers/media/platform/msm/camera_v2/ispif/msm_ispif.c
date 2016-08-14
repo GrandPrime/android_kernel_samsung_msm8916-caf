@@ -988,8 +988,10 @@ static int msm_ispif_set_vfe_info(struct ispif_device *ispif,
 	struct msm_ispif_vfe_info *vfe_info)
 {
 	memcpy(&ispif->vfe_info, vfe_info, sizeof(struct msm_ispif_vfe_info));
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	if (ispif->vfe_info.num_vfe > ispif->hw_num_isps)
 		return -EINVAL;
+#endif
 	return 0;
 }
 

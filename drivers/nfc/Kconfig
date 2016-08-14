@@ -58,34 +58,28 @@ config NFC_PN547
 	  NXP PN547 Near Field Communication controller support.
 	  This option enables device driver support for the NFC.
 	  It is used by many services. NFC is fully controlled using I2C
-	  to communication.
+	  to communicate the AP chip.
+
 
 config NFC_PN547_8916_USE_BBCLK2
-	  bool "NXP PN547 NFC CLOCK Controller"
-	  depends on NFC_PN547
-	  default n
-	  help
+	bool "NXP PN547 NFC CLOCK Controller"
+	depends on NFC_PN547
+	default n
+	help
 	  NXP PN547 Near Field Communication controller support.
 	  This option enables device driver support for the NFC.
 	  It is used by many services. NFC is fully controlled using I2C
 	  to communicate the AP chip.
 
 config NFC_PN547_8916_CLK_CTL
-	  bool "NXP PN547 NFC CLOCK Control"
-	  depends on NFC_PN547
-	  default n
-	  help
-	  NXP PN547 Near Field Communication controller support.
-	  This option control the clock in suspend and resume.
-
-config NFC_PN547_USE_EXTERNAL_LDO_VIO
-	bool "NXP PN547 NFC POWER Control"
+	bool "NXP PN547 NFC CLOCK Control"
 	depends on NFC_PN547
 	default n
 	help
 	  NXP PN547 Near Field Communication controller support.
-	  This option enables device driver support for the NFC.
-	  It is used by PN547 device driver uses external LDO as VIO power supply.
+	  This option control the clock in suspend and resume.
+
+
 config SEC_NFC_I2C
         tristate "SEC NFC driver for I2C interface"
         depends on I2C

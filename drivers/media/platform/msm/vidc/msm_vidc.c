@@ -726,6 +726,7 @@ int output_buffer_cache_invalidate(struct msm_vidc_inst *inst,
 	return 0;
 }
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 static bool valid_v4l2_buffer(struct v4l2_buffer *b,
 		struct msm_vidc_inst *inst) {
 	enum vidc_ports port =
@@ -737,13 +738,28 @@ static bool valid_v4l2_buffer(struct v4l2_buffer *b,
 	return port != MAX_PORT_NUM &&
 		inst->fmts[port]->num_planes == b->length;
 }
+#endif
 
 int msm_vidc_prepare_buf(void *instance, struct v4l2_buffer *b)
 {
 	struct msm_vidc_inst *inst = instance;
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	if (!inst || !b || !valid_v4l2_buffer(b, inst))
+#else
+	if (!inst || !b)
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
+
 		return -EINVAL;
+
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	if (!V4L2_TYPE_IS_MULTIPLANAR(b->type) || !b->length ||
+		(b->length > VIDEO_MAX_PLANES)) {
+		dprintk(VIDC_ERR, "%s: wrong input params\n",
+				__func__);
+		return -EINVAL;
+	}
+#endif
 
 	if (is_dynamic_output_buffer_mode(b, inst)) {
 		dprintk(VIDC_ERR, "%s: not supported in dynamic buffer mode\n",
@@ -894,8 +910,21 @@ int msm_vidc_qbuf(void *instance, struct v4l2_buffer *b)
 	int rc = 0;
 	int i;
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	if (!inst || !b || !valid_v4l2_buffer(b, inst))
+#else
+	if (!inst || !b)
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 		return -EINVAL;
+
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	if (!V4L2_TYPE_IS_MULTIPLANAR(b->type) || !b->length ||
+		(b->length > VIDEO_MAX_PLANES)) {
+		dprintk(VIDC_ERR, "%s: wrong input params\n",
+				__func__);
+		return -EINVAL;
+	}
+#endif
 
 	if (is_dynamic_output_buffer_mode(b, inst)) {
 		if (b->m.planes[0].reserved[0])
@@ -971,8 +1000,21 @@ int msm_vidc_dqbuf(void *instance, struct v4l2_buffer *b)
 	struct buffer_info *buffer_info = NULL;
 	int i = 0, rc = 0;
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	if (!inst || !b || !valid_v4l2_buffer(b, inst))
+#else
+	if (!inst || !b)
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 		return -EINVAL;
+
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	if (!V4L2_TYPE_IS_MULTIPLANAR(b->type) || !b->length ||
+		(b->length > VIDEO_MAX_PLANES)) {
+		dprintk(VIDC_ERR, "%s: wrong input params\n",
+				__func__);
+		return -EINVAL;
+	}
+#endif
 
 	if (inst->session_type == MSM_VIDC_DECODER)
 		rc = msm_vdec_dqbuf(instance, b);

@@ -123,7 +123,9 @@ extern int system_rev;
 #define DEV_AUDIO_1			(1 << 0)
 
 #define DEV_T1_USB_MASK		(DEV_USB_OTG | DEV_USB_CHG | DEV_USB)
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 #define DEV_T1_UART_MASK	(DEV_UART)
+#endif
 #define DEV_T1_CHARGER_MASK	(DEV_DEDICATED_CHG | DEV_CAR_KIT)
 #define DEV_CARKIT_CHARGER1_MASK	(1 << 1)
 #define MANSW1_OPEN_RUSTPROOF	((0x0 << 5) | (0x3 << 2) | (1 << 0))
@@ -156,7 +158,11 @@ extern int system_rev;
 #define DEV_AV_VBUS			(1 << 4)
 #define DEV_U200_CHARGER	(1 << 6)
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 #define DEV_T3_CHARGER_MASK	(DEV_U200_CHARGER | DEV_NON_STANDARD)
+#else
+#define DEV_T3_CHARGER_MASK	DEV_U200_CHARGER
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 
 /*
  * Manual Switch
@@ -237,7 +243,11 @@ struct sm5502_usbsw {
 	int				adc;
 	bool				undefined_attached;
 	/* muic current attached device */
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	enum muic_attached_dev		attached_dev;
+#else
+	muic_attached_dev		attached_dev;
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 #if defined(CONFIG_MUIC_SM5502_SUPPORT_LANHUB_TA)
 	unsigned int			previous_dock;
 	unsigned int			lanhub_ta_status;
@@ -1061,7 +1071,12 @@ static int sm5502_attach_dev(struct sm5502_usbsw *usbsw)
 			(check_sm5502_jig_state() ? "ON" : "OFF"));
 
 	/* USB */
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	if (val1 & DEV_USB || val2 & DEV_T2_USB_MASK) {
+#else
+	if ((val1 & DEV_USB) || (val2 & DEV_T2_USB_MASK)
+			|| (val3 & DEV_NON_STANDARD)) {
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 		if (vbus & DEV_VBUSIN_VALID) {
 			pr_info("[SM5502 MUIC] USB Connected\n");
 			pdata->callback(CABLE_TYPE_USB, SM5502_ATTACHED);
@@ -1262,8 +1277,13 @@ static int sm5502_detach_dev(struct sm5502_usbsw *usbsw)
 	}
 #endif
 	/* USB */
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	if (usbsw->dev1 & DEV_USB ||
 			usbsw->dev2 & DEV_T2_USB_MASK) {
+#else
+	if ((usbsw->dev1 & DEV_USB) || (usbsw->dev2 & DEV_T2_USB_MASK)
+			|| (usbsw->dev3 & DEV_NON_STANDARD)) {
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 		pr_info("[MUIC] USB Disonnected\n");
 		pdata->callback(CABLE_TYPE_USB, SM5502_DETACHED);
 	} else if (usbsw->dev1 & DEV_USB_CHG) {

@@ -28,8 +28,10 @@
 #include <linux/semaphore.h>
 #include <linux/reboot.h>
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 #define SCM_SVC_SEC_WDOG_TRIG	0x8
 #define SCM_SVC_SPIN_CPU	0xD
+#endif
 
 extern void *restart_reason;
 // Enable CONFIG_RESTART_REASON_DDR to use DDR address for saving restart reason

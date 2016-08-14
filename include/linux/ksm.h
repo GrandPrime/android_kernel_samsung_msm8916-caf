@@ -75,7 +75,6 @@ struct page *ksm_might_need_to_copy(struct page *page,
 
 int page_referenced_ksm(struct page *page,
 			struct mem_cgroup *memcg, unsigned long *vm_flags);
-// TODO: https://github.com/TheWhisp/android_kernel_samsung_msm8916-caf/commit/064d282a4500650dbcec175df6d592d99a4a31d6
 #if defined(CONFIG_SEC_FORTUNA_PROJECT)
 int try_to_unmap_ksm(struct page *page, enum ttu_flags flags);
 #else

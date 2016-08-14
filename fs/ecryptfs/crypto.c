@@ -568,7 +568,11 @@ int ecryptfs_encrypt_page(struct page *page)
 {
 	struct inode *ecryptfs_inode;
 	struct ecryptfs_crypt_stat *crypt_stat;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	char *enc_extent_virt;
+#else
 	char *enc_extent_virt = NULL;
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	struct page *enc_extent_page = NULL;
 	loff_t extent_offset;
 	int rc = 0;
@@ -701,7 +705,11 @@ int ecryptfs_decrypt_page(struct page *page)
 {
 	struct inode *ecryptfs_inode;
 	struct ecryptfs_crypt_stat *crypt_stat;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	char *enc_extent_virt;
+#else
 	char *enc_extent_virt = NULL;
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	struct page *enc_extent_page = NULL;
 	unsigned long extent_offset;
 	int rc = 0;
@@ -2098,9 +2106,17 @@ ecryptfs_add_new_key_tfm(struct ecryptfs_key_tfm **key_tfm, char *cipher_name,
 	tmp_tfm->key_size = key_size;
 #if defined(CONFIG_CRYPTO_FIPS) && !defined(CONFIG_FORCE_DISABLE_FIPS)
 	if (mount_flags & ECRYPTFS_ENABLE_CC) {
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+		strncpy(tmp_tfm->cipher_mode, ECRYPTFS_AES_CBC_MODE, ECRYPTFS_MAX_CIPHER_MODE_SIZE);
+#else
 		strncpy(tmp_tfm->cipher_mode, ECRYPTFS_AES_CBC_MODE, ECRYPTFS_MAX_CIPHER_MODE_SIZE+1);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	} else {
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+		strncpy(tmp_tfm->cipher_mode, ECRYPTFS_AES_ECB_MODE, ECRYPTFS_MAX_CIPHER_MODE_SIZE);
+#else
 		strncpy(tmp_tfm->cipher_mode, ECRYPTFS_AES_ECB_MODE, ECRYPTFS_MAX_CIPHER_MODE_SIZE+1);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	}
 
 	rc = ecryptfs_process_key_cipher(&tmp_tfm->key_tfm,
@@ -2200,9 +2216,17 @@ int ecryptfs_get_tfm_and_mutex_for_cipher_name(struct crypto_blkcipher **tfm,
 	mutex_lock(&key_tfm_list_mutex);
 #if defined(CONFIG_CRYPTO_FIPS) && !defined(CONFIG_FORCE_DISABLE_FIPS)
     if (mount_flags & ECRYPTFS_ENABLE_CC) {
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+		strncpy(cipher_mode, ECRYPTFS_AES_CBC_MODE, ECRYPTFS_MAX_CIPHER_MODE_SIZE);
+#else
 		strncpy(cipher_mode, ECRYPTFS_AES_CBC_MODE, ECRYPTFS_MAX_CIPHER_MODE_SIZE+1);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	} else {
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+		strncpy(cipher_mode, ECRYPTFS_AES_ECB_MODE, ECRYPTFS_MAX_CIPHER_MODE_SIZE);
+#else
 		strncpy(cipher_mode, ECRYPTFS_AES_ECB_MODE, ECRYPTFS_MAX_CIPHER_MODE_SIZE+1);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	}
 
 	if (!ecryptfs_tfm_exists(cipher_name, cipher_mode, &key_tfm)) {

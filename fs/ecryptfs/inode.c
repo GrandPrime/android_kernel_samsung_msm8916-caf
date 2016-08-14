@@ -48,6 +48,7 @@
 #include "ecryptfs_dlp.h"
 #endif
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 /* Do not directly use this function. Use ECRYPTFS_OVERRIDE_CRED() instead. */
 const struct cred * ecryptfs_override_fsids(uid_t fsuid, gid_t fsgid)
 {
@@ -75,6 +76,7 @@ void ecryptfs_revert_fsids(const struct cred * old_cred)
 	revert_creds(old_cred); 
 	put_cred(cur_cred); 
 }
+#endif
 
 #ifndef CONFIG_SDP
 static struct dentry *lock_parent(struct dentry *dentry)
@@ -186,7 +188,6 @@ static int ecryptfs_interpose(struct dentry *lower_dentry,
 	if(d_unhashed(dentry))
 		d_rehash(dentry);
 #endif
-
 #ifdef CONFIG_SDP
 	if(S_ISDIR(inode->i_mode) && dentry) {
 		if(IS_UNDER_ROOT(dentry)) {
@@ -900,8 +901,9 @@ out:
 	return rc;
 }
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 #define ECRYPTFS_SDP_RENAME_DEBUG 0
-
+#endif
 static int
 ecryptfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 		struct inode *new_dir, struct dentry *new_dentry)
@@ -1496,6 +1498,7 @@ ecryptfs_setxattr(struct dentry *dentry, const char *name, const void *value,
 #else
 	if (!rc && dentry->d_inode)
 #endif /* CONFIG_SEC_FORTUNA_PROJECT */
+
 		fsstack_copy_attr_all(dentry->d_inode, lower_dentry->d_inode);
 out:
 	return rc;
@@ -1508,7 +1511,7 @@ ecryptfs_getxattr_lower(struct dentry *lower_dentry, const char *name,
 	int rc = 0;
 
 	if (!lower_dentry->d_inode->i_op->getxattr) {
-#if !define(ECRYPT_FS_VIRTUAL_FAT_XATTR) || defined(CONFIG_SEC_FORTUNA_PROJECT)
+#if !defined(ECRYPT_FS_VIRTUAL_FAT_XATTR) || defined(CONFIG_SEC_FORTUNA_PROJECT)
 		rc = -EOPNOTSUPP;
 #endif
 		goto out;

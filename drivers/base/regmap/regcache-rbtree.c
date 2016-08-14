@@ -362,7 +362,11 @@ static int regcache_rbtree_write(struct regmap *map, unsigned int reg,
 		rbnode = kzalloc(sizeof *rbnode, GFP_KERNEL);
 		if (!rbnode)
 			return -ENOMEM;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 		rbnode->blklen = 1;
+#else
+		rbnode->blklen = sizeof(*rbnode);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 		rbnode->base_reg = reg;
 		rbnode->block = kmalloc(rbnode->blklen * map->cache_word_size,
 					GFP_KERNEL);

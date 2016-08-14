@@ -40,9 +40,12 @@
 #include <linux/of_gpio.h>
 #include <linux/sensor/sensors_core.h>
 
+#if defined(CONFIG_CHARGER_NOTIFY_SENSOR)
+#include <linux/power_supply.h>
+#endif
 
 #include "bmm050.h"
-/* #include "bs_log.h" */
+//#include "bs_log.h"
 
 /* sensor specific */
 #define SENSOR_NAME	"magnetic_sensor"
@@ -138,11 +141,59 @@ struct bmm_client_data {
 	struct mutex mutex_value;
 
 	struct regulator *reg_vio;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	struct regulator *reg_vdd;
+#endif
 	int place;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	u64 old_timestamp;
+#endif
+
+#if defined(CONFIG_CHARGER_NOTIFY_SENSOR)
+	int offset_ta_x;
+	int offset_ta_y;
+	int offset_ta_z;
+	int offset_usb_x;
+	int offset_usb_y;
+	int offset_usb_z;
+#endif
 };
 
 static struct i2c_client *bmm_client;
+
+#if defined(CONFIG_CHARGER_NOTIFY_SENSOR)
+#define CHARGER_STATE_TA_CHARGING	1
+#define CHARGER_STATE_USB_CHARGING	2
+static struct power_supply *batt_psy = 0;
+static int check_charger_state(void)
+{
+	union power_supply_propval ret = {0,};
+
+	if (!batt_psy) {
+		batt_psy = power_supply_get_by_name("battery");
+		if (!batt_psy)
+			pr_info( "BMM %s Can not get the battery power_supply. \n",__func__);
+			return 0;
+	}
+
+	batt_psy->get_property(batt_psy,POWER_SUPPLY_PROP_STATUS, &ret);
+	if(ret.intval == POWER_SUPPLY_STATUS_CHARGING) { //Charging
+		batt_psy->get_property(batt_psy,POWER_SUPPLY_PROP_VOLTAGE_NOW, &ret);
+		if(ret.intval < 4300000) { //CC charging
+			//pr_info( "BMM %s Charger CC Charging . \n",__func__);
+			batt_psy->get_property(batt_psy,POWER_SUPPLY_PROP_ONLINE, &ret);
+			if( ret.intval == POWER_SUPPLY_TYPE_MAINS)  //TA Connect-ing
+				return CHARGER_STATE_TA_CHARGING; // TA Charging
+			else if (ret.intval == POWER_SUPPLY_TYPE_USB) //USB Connect-ing
+				return CHARGER_STATE_USB_CHARGING; // USB Charging
+		}
+	}
+
+	//pr_info( "BMM %s No Charger connect 0. \n",__func__);
+	return 0;
+}
+#endif
+
 /* i2c operation for API */
 static void bmm_delay(u32 msec);
 static int bmm_i2c_read(struct i2c_client *client, u8 reg_addr,
@@ -228,7 +279,11 @@ static void bmm_dump_reg(struct i2c_client *client)
 		sprintf(dbg_buf_str + i * 3, "%02x%c", dbg_buf[i],
 			(((i + 1) % BYTES_PER_LINE == 0) ? '\n' : ' '));
 	}
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	pr_debug("%s\n", dbg_buf_str);
+#else
+	printk(KERN_DEBUG "%s\n", dbg_buf_str);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 #endif
 }
 
@@ -432,15 +487,31 @@ static void bmm_work_func(struct work_struct *work)
 	unsigned long delay =
 		msecs_to_jiffies(atomic_read(&client_data->delay));
 	struct bmm050_mdata_s32 value = {0,0,0,0,0};
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	struct timespec ts = ktime_to_timespec(ktime_get_boottime());
 	u64 timestamp_new = ts.tv_sec * 1000000000ULL + ts.tv_nsec;
 	u64 timestamp ;
 	int time_hi, time_lo;
+#endif
 	int i = 0;
 	mutex_lock(&client_data->mutex_value);
 	while (i++ < 3) {
 		BMM_CALL_API(read_mdataXYZ_s32)(&value);
 		if (value.drdy) {
+#if defined(CONFIG_CHARGER_NOTIFY_SENSOR)
+			if(check_charger_state() == CHARGER_STATE_TA_CHARGING)
+			{
+				value.datax+=client_data->offset_ta_x;
+				value.datay+=client_data->offset_ta_y;
+				value.dataz+=client_data->offset_ta_z;
+			}
+			else if(check_charger_state() == CHARGER_STATE_USB_CHARGING)
+			{
+				value.datax+=client_data->offset_usb_x;
+				value.datay+=client_data->offset_usb_y;
+				value.dataz+=client_data->offset_usb_z;
+			}
+#endif
 			bmm_remap_sensor_data(&value, client_data);
 			client_data->value = value;
 			break;
@@ -454,6 +525,7 @@ static void bmm_work_func(struct work_struct *work)
 
 	mutex_unlock(&client_data->mutex_op_mode);
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	if ((timestamp_new - client_data->old_timestamp) > atomic_read(&client_data->delay)* 1800000LL\
 		&& (client_data->old_timestamp != 0))
 	{
@@ -473,16 +545,24 @@ static void bmm_work_func(struct work_struct *work)
 	time_hi = (int)((timestamp_new & TIME_HI_MASK) >> TIME_HI_SHIFT);
 	time_lo = (int)(timestamp_new & TIME_LO_MASK);
 
+#endif
+
 	input_report_rel(client_data->input, REL_X, client_data->value.datax);
 	input_report_rel(client_data->input, REL_Y, client_data->value.datay);
 	input_report_rel(client_data->input, REL_Z, client_data->value.dataz);
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	input_report_rel(client_data->input, REL_RX, time_hi);
 	input_report_rel(client_data->input, REL_RY, time_lo);
 	input_sync(client_data->input);
 
 	client_data->old_timestamp = timestamp_new;
+#endif
 
 	mutex_unlock(&client_data->mutex_value);
+
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	input_sync(client_data->input);
+#endif
 
 	schedule_delayed_work(&client_data->work, delay);
 }
@@ -513,7 +593,11 @@ static int bmm_get_odr(struct i2c_client *client, u8 *podr)
 static ssize_t bmm_show_chip_id(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	return snprintf(buf, PAGE_SIZE, "%d\n", SENSOR_CHIP_ID_BMM);
+#else
+	return sprintf(buf, "%d\n", SENSOR_CHIP_ID_BMM);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 }
 
 static ssize_t bmm_show_op_mode(struct device *dev,
@@ -539,7 +623,11 @@ static ssize_t bmm_show_op_mode(struct device *dev,
 
 	pr_info(" %s-op_mode: %d", __func__, op_mode);
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	ret = snprintf(buf, PAGE_SIZE, "%d\n", op_mode);
+#else
+	ret = sprintf(buf, "%d\n", op_mode);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 
 	return ret;
 }
@@ -651,7 +739,11 @@ static ssize_t bmm_show_odr(struct device *dev,
 
 	if (!err) {
 		if (data < ARRAY_SIZE(odr_map))
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 			err = snprintf(buf, PAGE_SIZE, "%d\n", odr_map[data]);
+#else
+			err = sprintf(buf, "%d\n", odr_map[data]);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 		else
 			err = -EINVAL;
 	}
@@ -734,7 +826,11 @@ static ssize_t bmm_show_rept_xy(struct device *dev,
 	if (err)
 		return err;
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	return snprintf(buf, PAGE_SIZE, "%d\n", data);
+#else
+	return sprintf(buf, "%d\n", data);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 }
 
 static ssize_t bmm_store_rept_xy(struct device *dev,
@@ -802,7 +898,11 @@ static ssize_t bmm_show_rept_z(struct device *dev,
 	if (err)
 		return err;
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	return snprintf(buf, PAGE_SIZE, "%d\n", data);
+#else
+	return sprintf(buf, "%d\n", data);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 }
 
 static ssize_t bmm_store_rept_z(struct device *dev,
@@ -864,7 +964,11 @@ static ssize_t bmm_show_value(struct device *dev,
 	} else
 		pr_info("%s- data not ready", __func__);
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	count = snprintf(buf, PAGE_SIZE, "%d %d %d\n",
+#else
+	count = sprintf(buf, "%d %d %d\n",
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 			client_data->value.datax,
 			client_data->value.datay,
 			client_data->value.dataz);
@@ -891,7 +995,11 @@ static ssize_t bmm_show_value_raw(struct device *dev,
 
 	BMM_CALL_API(get_raw_xyz)(&value);
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	count = snprintf(buf, PAGE_SIZE, "%hd %hd %hd\n",
+#else
+	count = sprintf(buf, "%hd %hd %hd\n",
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 			value.datax,
 			value.datay,
 			value.dataz);
@@ -920,6 +1028,20 @@ static ssize_t bmm_show_raw_data(struct device *dev,
 	if ((value.datax == 0) && (value.datay == 0))
 		return 0;
 
+#if defined(CONFIG_CHARGER_NOTIFY_SENSOR)
+	if(check_charger_state() == CHARGER_STATE_TA_CHARGING)
+	{
+		value.datax+=client_data->offset_ta_x;
+		value.datay+=client_data->offset_ta_y;
+		value.dataz+=client_data->offset_ta_z;
+	}
+	else if(check_charger_state() == CHARGER_STATE_USB_CHARGING)
+	{
+		value.datax+=client_data->offset_usb_x;
+		value.datay+=client_data->offset_usb_y;
+		value.dataz+=client_data->offset_usb_z;
+	}
+#endif
 
 	if (value.datax == BMM050_OVERFLOW_OUTPUT_S32)
 		value.datax = BMM050_OVERFLOW_OUTPUT_S32_XY;
@@ -928,7 +1050,11 @@ static ssize_t bmm_show_raw_data(struct device *dev,
 	if (value.dataz == BMM050_OVERFLOW_OUTPUT_S32)
 		value.dataz = BMM050_OVERFLOW_OUTPUT_S32_Z;
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	count = snprintf(buf, PAGE_SIZE, "%d,%d,%d\n",
+#else
+	count = sprintf(buf, "%d,%d,%d\n",
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 			value.datax,
 			value.datay,
 			value.dataz);
@@ -945,7 +1071,11 @@ static ssize_t bmm_show_enable(struct device *dev,
 	int err;
 
 	mutex_lock(&client_data->mutex_enable);
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	err = snprintf(buf, PAGE_SIZE, "%d\n", client_data->enable);
+#else
+	err = sprintf(buf, "%d\n", client_data->enable);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	mutex_unlock(&client_data->mutex_enable);
 	return err;
 }
@@ -1015,7 +1145,9 @@ static ssize_t bmm_store_enable(struct device *dev,
 	mutex_lock(&client_data->mutex_enable);
 	if (data != client_data->enable) {
 		if (data) {
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 			client_data->old_timestamp = 0LL;
+#endif
 			schedule_delayed_work(
 					&client_data->work,
 					msecs_to_jiffies(atomic_read(
@@ -1062,13 +1194,17 @@ static ssize_t bmm_store_delay(struct device *dev,
 
 	data = data / 1000000L;
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
     pr_info("%s [%d]\n", __func__, (int)data);
 
 	if (data > BMM_DELAY_DEFAULT)
 		data = BMM_DELAY_DEFAULT;
 	else if (data < BMM_DELAY_MIN)
 		data = BMM_DELAY_MIN;
-
+#else
+	if (data < BMM_DELAY_MIN)
+		data = BMM_DELAY_MIN;
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	pr_info("%s [%d]\n", __func__, (int)data);
 	atomic_set(&client_data->delay, data);
 
@@ -1141,8 +1277,12 @@ static ssize_t bmm_show_test(struct device *dev,
 
 	pr_info("%d,%d,%d,%d,%d,%d\n", status, client_data->result_test,
 		value.datax, value.datay, value.dataz, err);
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	err = snprintf(buf, PAGE_SIZE, "%d,%d,%d,%d,%d,%d\n",
 		status, client_data->result_test,
+#else
+	err = sprintf(buf, "%d,%d,%d,%d,%d,%d\n", status, client_data->result_test,
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 		value.datax, value.datay, value.dataz, err);
 	return err;
 }
@@ -1250,21 +1390,35 @@ static ssize_t bmm_show_place(struct device *dev,
 
 	int place = client_data->place;
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	return snprintf(buf, PAGE_SIZE, "%d\n", place);
+#else
+	return sprintf(buf, "%d\n", place);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 }
 
 static ssize_t bmm_read_name(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	pr_info("Bosch Sensortec Device!%s registered\n", CHIP_NAME);
 	return snprintf(buf, PAGE_SIZE, "%s\n", CHIP_NAME);
+#else
+	printk(KERN_INFO "Bosch Sensortec Device!%s registered\n", CHIP_NAME);
+	return sprintf(buf, "%s\n", CHIP_NAME);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 }
 
 static ssize_t bmm_read_vendor(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	pr_info("Magnetic] %s vendor\n", CHIP_VENDOR);
 	return snprintf(buf, PAGE_SIZE, "%s\n", CHIP_VENDOR);
+#else
+	printk(KERN_INFO "Magnetic] %s vendor\n", CHIP_VENDOR);
+	return sprintf(buf, "%s\n", CHIP_VENDOR);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 }
 
 static ssize_t bmm_read_status(struct device *dev,
@@ -1283,9 +1437,15 @@ static ssize_t bmm_read_status(struct device *dev,
 		goto exit_err_clean;
 	}
 #endif
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	pr_info("Magnetic] %s [%d]\n", __func__, status);
 
 	return snprintf(buf, PAGE_SIZE, "%d\n", status);
+#else
+	printk(KERN_INFO "Magnetic] %s [%d]\n", __func__, status);
+
+	return sprintf(buf, "%d\n", status);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 }
 
 static DEVICE_ATTR(chip_id, S_IRUGO,
@@ -1381,8 +1541,10 @@ static int bmm_input_init(struct bmm_client_data *client_data)
 	input_set_capability(dev, EV_REL, REL_X);
 	input_set_capability(dev, EV_REL, REL_Y);
 	input_set_capability(dev, EV_REL, REL_Z);
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	input_set_capability(dev, EV_REL, REL_RX);
 	input_set_capability(dev, EV_REL, REL_RY);
+#endif
 
 	input_set_capability(dev, EV_ABS, ABS_MISC);
 	input_set_abs_params(dev, ABS_X, MAG_VALUE_MIN, MAG_VALUE_MAX, 0, 0);
@@ -1487,6 +1649,41 @@ static int bmm050_parse_dt(struct bmm_client_data *data, struct device *dev)
 		goto error;
 	}
 
+#if defined(CONFIG_CHARGER_NOTIFY_SENSOR)
+	ret = of_property_read_u32(np, "bmm050,offset_ta_x", &data->offset_ta_x);
+	if (unlikely(ret)) {
+		dev_err(dev, "error reading property offset_ta_x from device node %d\n", data->offset_ta_x);
+		goto error;
+	}
+	ret = of_property_read_u32(np, "bmm050,offset_ta_y", &data->offset_ta_y);
+	if (unlikely(ret)) {
+		dev_err(dev, "error reading property offset_ta_y from device node %d\n", data->offset_ta_y);
+		goto error;
+	}
+	ret = of_property_read_u32(np, "bmm050,offset_ta_z", &data->offset_ta_z);
+	if (unlikely(ret)) {
+		dev_err(dev, "error reading property offset_ta_z from device node %d\n", data->offset_ta_z);
+		goto error;
+	}
+	ret = of_property_read_u32(np, "bmm050,offset_usb_x", &data->offset_usb_x);
+	if (unlikely(ret)) {
+		dev_err(dev, "error reading property offset_usb_x from device node %d\n", data->offset_usb_x);
+		goto error;
+	}
+	ret = of_property_read_u32(np, "bmm050,offset_usb_y", &data->offset_usb_y);
+	if (unlikely(ret)) {
+		dev_err(dev, "error reading property offset_usb_y from device node %d\n", data->offset_usb_y);
+		goto error;
+	}
+	ret = of_property_read_u32(np, "bmm050,offset_usb_z", &data->offset_usb_z);
+	if (unlikely(ret)) {
+		dev_err(dev, "error reading property offset_usb_z from device node %d\n", data->offset_usb_z);
+		goto error;
+	}
+	pr_info("%s offset_ta_x >> %d,offset_ta_y >> %d,offset_ta_z >> %d offset_usb_x >> %d offset_usb_y >> %d offset_usb_z >> %d\n",
+		__func__,data->offset_ta_x,data->offset_ta_y,data->offset_ta_z,data->offset_usb_x,data->offset_usb_y,data->offset_usb_z);
+#endif
+
 	return 0;
 error:
 	return ret;
@@ -1507,12 +1704,30 @@ static int bmm050_mag_power_onoff(struct bmm_client_data *data, bool onoff)
 		ret = regulator_set_voltage(data->reg_vio, 1800000, 1800000);
 	}
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	data->reg_vdd = devm_regulator_get(&data->client->dev, "bmm050,vdd");
+	if (IS_ERR(data->reg_vdd)) {
+		pr_err("could not get vdd, %ld\n", PTR_ERR(data->reg_vdd));
+		ret = -ENOMEM;
+		goto err_vdd;
+	} else if (!regulator_get_voltage(data->reg_vdd)) {
+		ret = regulator_set_voltage(data->reg_vdd, 2850000, 2850000);
+	}
+#endif
+
 	if (onoff) {
 		ret = regulator_enable(data->reg_vio);
 		if (ret)
 			pr_err("%s: Failed to enable vio.\n", __func__);
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+		ret = regulator_enable(data->reg_vdd);
+		if (ret) {
+			pr_err("%s: Failed to enable vdd.\n", __func__);
+		}
+#endif
 	} else {
 		ret = regulator_disable(data->reg_vio);
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 		if (ret)
 			pr_err("%s: Failed to disable vio.\n", __func__);
 	}
@@ -1522,6 +1737,24 @@ static int bmm050_mag_power_onoff(struct bmm_client_data *data, bool onoff)
 err_vio:
 	msleep(20);
 	return ret;
+#else
+		if (ret) {
+			pr_err("%s: Failed to disable vio.\n", __func__);
+		}
+		ret = regulator_disable(data->reg_vdd);
+		if (ret) {
+			pr_err("%s: Failed to disable vdd.\n", __func__);
+		}
+	}
+	pr_info("%s success:%d\n", __func__, onoff);
+	msleep(20);
+	return ret;
+
+err_vdd:
+	devm_regulator_put(data->reg_vio);
+err_vio:
+	return ret;
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 }
 
 
@@ -1534,7 +1767,11 @@ static int bmm_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	pr_info("%s-function entrance\n", __func__);
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 		pr_info("i2c_check_functionality error!\n");
+#else
+		printk("i2c_check_functionality error!\n");
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 		err = -EIO;
 		goto exit_err_clean;
 	}
@@ -1686,8 +1923,7 @@ static int bmm_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	pr_info("%s - sensor %s probed successfully\n", __func__, SENSOR_NAME);
 
 	pr_info("%s - i2c_client: %p client_data: %p i2c_device: %p input: %p\n",
-		__func__, client, client_data,
-		&client->dev, client_data->input);
+		__func__, client, client_data, &client->dev, client_data->input);
 
 	return 0;
 
@@ -1784,6 +2020,18 @@ static int bmm_resume(struct i2c_client *client)
 	return err;
 }
 
+#if 0
+void bmm_shutdown(struct i2c_client *client)
+{
+	struct bmm_client_data *client_data =
+		(struct bmm_client_data *)i2c_get_clientdata(client);
+
+	mutex_lock(&client_data->mutex_power_mode);
+	bmm_set_op_mode(client_data, BMM_VAL_NAME(SUSPEND_MODE));
+	mutex_unlock(&client_data->mutex_power_mode);
+}
+#endif
+
 static int bmm_remove(struct i2c_client *client)
 {
 	int err = 0;
@@ -1806,7 +2054,10 @@ static int bmm_remove(struct i2c_client *client)
 		sysfs_remove_group(&client_data->input->dev.kobj,
 				&bmm_attribute_group);
 		bmm_input_destroy(client_data);
-
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+		devm_regulator_put(client_data->reg_vio);
+		devm_regulator_put(client_data->reg_vdd);
+#endif
 		kfree(client_data);
 
 		bmm_client = NULL;
@@ -1842,6 +2093,9 @@ static struct i2c_driver bmm_driver = {
 	.id_table = bmm_id,
 	.probe = bmm_probe,
 	.remove = bmm_remove,
+#if 0
+	.shutdown = bmm_shutdown,
+#endif
 	.suspend = bmm_suspend,
 	.resume = bmm_resume,
 };

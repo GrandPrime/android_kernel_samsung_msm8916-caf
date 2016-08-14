@@ -289,6 +289,16 @@ static void disable_bms_irq(struct bms_irq *irq)
 	}
 }
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+static void enable_bms_irq(struct bms_irq *irq)
+{
+	if (__test_and_clear_bit(0, &irq->disabled)) {
+		enable_irq(irq->irq);
+		pr_debug("enable irq %d\n", irq->irq);
+	}
+}
+#endif
+
 static void bms_stay_awake(struct bms_wakeup_source *source)
 {
 	if (__test_and_clear_bit(0, &source->disabled)) {
@@ -3903,6 +3913,9 @@ static int bms_suspend(struct device *dev)
 
 	if (chip->apply_suspend_config) {
 		if (chip->dt.cfg_force_s3_on_suspend) {
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+			disable_bms_irq(&chip->fifo_update_done_irq);
+#endif
 			pr_debug("Forcing S3 state\n");
 			mutex_lock(&chip->state_change_mutex);
 			force_fsm_state(chip, S3_STATE);
@@ -3940,6 +3953,9 @@ static int bms_resume(struct device *dev)
 				force_fsm_state(chip, S2_STATE);
 			}
 			mutex_unlock(&chip->state_change_mutex);
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+			enable_bms_irq(&chip->fifo_update_done_irq);
+#endif
 			/*
 			 * if we were charging while suspended, we will
 			 * be woken up by the fifo done interrupt and no

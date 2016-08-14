@@ -12,4 +12,8 @@
  * GNU General Public License for more details.
  */
 #define MOBICORE_COMPONENT_BUILD_TAG \
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	"t-base-QC-MSM8916-Android-301B-V001-2015-01-07_20-03-32_27"
+#else
+	"t-base-Qualcomm-MSM8994-Android-301B-V001"
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */

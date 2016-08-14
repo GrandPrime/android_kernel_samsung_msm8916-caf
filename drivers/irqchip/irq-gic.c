@@ -272,7 +272,11 @@ static void gic_show_resume_irq(struct gic_chip_data *gic)
 {
 	unsigned int i;
 	u32 enabled;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	u32 pending[32];
+#else
+	unsigned long pending[32];
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	void __iomem *base = gic_data_dist_base(gic);
 
 	if (!msm_show_resume_irq_mask)
@@ -286,9 +290,15 @@ static void gic_show_resume_irq(struct gic_chip_data *gic)
 	}
 	raw_spin_unlock(&irq_controller_lock);
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	for (i = find_first_bit((unsigned long *)pending, gic->gic_irqs);
 		i < gic->gic_irqs;
 		i = find_next_bit((unsigned long *)pending, gic->gic_irqs, i+1)) {
+#else
+	for (i = find_first_bit(pending, gic->gic_irqs);
+		i < gic->gic_irqs;
+		i = find_next_bit(pending, gic->gic_irqs, i+1)) {
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 #ifdef CONFIG_SEC_PM_DEBUG
 			log_wakeup_reason(i + gic->irq_offset);
 			update_wakeup_reason_stats(i + gic->irq_offset);

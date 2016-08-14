@@ -40,6 +40,24 @@ static ssize_t state_show(struct device *dev, struct device_attribute *attr,
 	return sprintf(buf, "%d\n", sdev->state);
 }
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+static ssize_t state_store(struct device *dev, struct device_attribute *attr,
+			   const char *buf, size_t count)
+{
+	u32 state;
+	ssize_t ret = 0;
+	struct switch_dev *edev = (struct switch_dev *) dev_get_drvdata(dev);
+
+	ret = sscanf(buf, "0x%x", &state);
+	if (ret == 0)
+		return -EINVAL;
+	else
+		switch_set_state(edev, state);
+
+	return count;
+}
+#endif
+
 static ssize_t name_show(struct device *dev, struct device_attribute *attr,
 		char *buf)
 {
@@ -54,8 +72,13 @@ static ssize_t name_show(struct device *dev, struct device_attribute *attr,
 	return sprintf(buf, "%s\n", sdev->name);
 }
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 static DEVICE_ATTR(state, S_IRUGO, state_show, NULL);
 static DEVICE_ATTR(name, S_IRUGO, name_show, NULL);
+#else
+static DEVICE_ATTR(state, S_IRUGO | S_IWUSR, state_show, state_store);
+static DEVICE_ATTR(name, S_IRUGO | S_IWUSR, name_show, state_store);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 
 void switch_set_state(struct switch_dev *sdev, int state)
 {

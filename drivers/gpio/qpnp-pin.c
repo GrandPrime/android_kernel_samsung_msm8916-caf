@@ -1375,7 +1375,11 @@ static int qpnp_pin_probe(struct spmi_device *spmi)
 	struct resource *res;
 	struct spmi_resource *d_node;
 	int i, rc;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	u32 lowest_gpio = UINT_MAX, highest_gpio = 0;
+#else
+	int lowest_gpio = UINT_MAX, highest_gpio = 0;
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	u32 gpio;
 	char version[Q_REG_SUBTYPE - Q_REG_DIG_MAJOR_REV + 1];
 	const char *dev_name;
@@ -1433,7 +1437,11 @@ static int qpnp_pin_probe(struct spmi_device *spmi)
 
 	/* allocate gpio lookup tables */
 	q_chip->pmic_pins = kzalloc(sizeof(struct qpnp_pin_spec *) *
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 					(highest_gpio - lowest_gpio + 1),
+#else
+						highest_gpio - lowest_gpio + 1,
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 					GFP_KERNEL);
 	q_chip->chip_gpios = kzalloc(sizeof(struct qpnp_pin_spec *) *
 						spmi->num_dev_node, GFP_KERNEL);

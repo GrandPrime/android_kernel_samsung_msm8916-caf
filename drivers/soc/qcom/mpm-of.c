@@ -653,7 +653,11 @@ static void msm_mpm_work_fn(struct work_struct *work)
 	unsigned long flags;
 	while (1) {
 		bool allow;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+		wait_for_completion(&wake_wq);
+#else
 		wait_for_completion_interruptible(&wake_wq);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 		spin_lock_irqsave(&msm_mpm_lock, flags);
 		allow = msm_mpm_irqs_detectable(true) &&
 				msm_mpm_gpio_irqs_detectable(true);

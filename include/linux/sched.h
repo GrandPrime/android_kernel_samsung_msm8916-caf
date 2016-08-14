@@ -554,7 +554,7 @@ struct signal_struct {
 	atomic_t		sigcnt;
 	atomic_t		live;
 	int			nr_threads;
-#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	struct list_head	thread_head;
 #endif
 

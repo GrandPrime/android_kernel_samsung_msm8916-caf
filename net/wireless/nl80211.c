@@ -4256,10 +4256,20 @@ static int nl80211_del_station(struct sk_buff *skb, struct genl_info *info)
 {
 	struct cfg80211_registered_device *rdev = info->user_ptr[0];
 	struct net_device *dev = info->user_ptr[1];
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	u8 *mac_addr = NULL;
+#else
+	struct station_del_parameters params;
+
+	memset(&params, 0, sizeof(params));
+#endif
 
 	if (info->attrs[NL80211_ATTR_MAC])
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 		mac_addr = nla_data(info->attrs[NL80211_ATTR_MAC]);
+#else
+		params.mac = nla_data(info->attrs[NL80211_ATTR_MAC]);
+#endif
 
 	if (dev->ieee80211_ptr->iftype != NL80211_IFTYPE_AP &&
 	    dev->ieee80211_ptr->iftype != NL80211_IFTYPE_AP_VLAN &&
@@ -4269,8 +4279,32 @@ static int nl80211_del_station(struct sk_buff *skb, struct genl_info *info)
 
 	if (!rdev->ops->del_station)
 		return -EOPNOTSUPP;
-
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	return rdev_del_station(rdev, dev, mac_addr);
+#else
+	if (info->attrs[NL80211_ATTR_MGMT_SUBTYPE]) {
+		params.subtype =
+			nla_get_u8(info->attrs[NL80211_ATTR_MGMT_SUBTYPE]);
+		if (params.subtype != IEEE80211_STYPE_DISASSOC >> 4 &&
+		    params.subtype != IEEE80211_STYPE_DEAUTH >> 4)
+			return -EINVAL;
+	} else {
+		/* Default to Deauthentication frame */
+		params.subtype = IEEE80211_STYPE_DEAUTH >> 4;
+	}
+
+	if (info->attrs[NL80211_ATTR_REASON_CODE]) {
+		params.reason_code =
+			nla_get_u16(info->attrs[NL80211_ATTR_REASON_CODE]);
+		if (params.reason_code == 0)
+			return -EINVAL; /* 0 is reserved */
+	} else {
+		/* Default to reason code 2 */
+		params.reason_code = WLAN_REASON_PREV_AUTH_NOT_VALID;
+	}
+
+	return rdev_del_station(rdev, dev, &params);
+#endif
 }
 
 static int nl80211_send_mpath(struct sk_buff *msg, u32 portid, u32 seq,
@@ -6068,7 +6102,13 @@ static int nl80211_dump_survey(struct sk_buff *skb,
 static bool nl80211_valid_wpa_versions(u32 wpa_versions)
 {
 	return !(wpa_versions & ~(NL80211_WPA_VERSION_1 |
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+				  NL80211_WPA_VERSION_2 |
+/*SEC_PRODUCT_FEATURE_WLAN_SUPPORT_WAPI*/
+				  NL80211_WAPI_VERSION_1 ));
+#else
 				  NL80211_WPA_VERSION_2));
+#endif
 }
 
 static int nl80211_authenticate(struct sk_buff *skb, struct genl_info *info)

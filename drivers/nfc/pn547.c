@@ -58,9 +58,6 @@ struct pn547_dev {
 	unsigned int ven_gpio;
 	unsigned int firm_gpio;
 	unsigned int irq_gpio;
-#ifdef CONFIG_NFC_PN547_USE_EXTERNAL_LDO_VIO
-	unsigned int vio_gpio;
-#endif
 #ifdef CONFIG_NFC_PN547_8916_CLK_CTL
 	unsigned int nfc_enable;
 #endif
@@ -373,8 +370,51 @@ static const struct file_operations pn547_dev_fops = {
 	.open = pn547_dev_open,
 	.unlocked_ioctl = pn547_dev_ioctl,
 };
+/*
+static void nfc_power_onoff(int en)
+{
+	int rc;
+	static struct regulator* ldo14;
+	static struct regulator* ldo5;
+	
+	printk(KERN_ERR "%s %s\n", __func__, (en) ? "on" : "off");
+	if(!ldo14){
+		ldo14 = regulator_get(NULL,"8916_l14");
+		rc = regulator_set_voltage(ldo14,3000000,3000000);
+		pr_info("[NXP] %s, %d\n", __func__, __LINE__);
+		if (rc){
+			printk(KERN_ERR "%s: 8916_l14 set_level failed (%d)\n",__func__, rc);
+		}
+	}
+	if(!ldo5){
+		ldo5 = regulator_get(NULL,"8916_l5");
+		rc = regulator_set_voltage(ldo5,1800000,1800000);
+		pr_info("[NXP] %s, %d\n", __func__, __LINE__);
+		if (rc){
+			printk(KERN_ERR "%s: 8916_l5 set_level failed (%d)\n",__func__, rc);
+		}
+	}
+	
+	if(en){
+		rc = regulator_enable(ldo14);
+		if (rc){
+			printk(KERN_ERR "%s: 8916_l14 enable failed (%d)\n",__func__, rc);
+		}
+		rc = regulator_enable(ldo5);
+		if (rc){
+			printk(KERN_ERR "%s: 8916_l5 enable failed (%d)\n",__func__, rc);
+		}
+	}
+	else{
+		rc = regulator_disable(ldo14);
+		if (rc){
+			printk(KERN_ERR "%s: 8916_l14 disable failed (%d)\n",__func__, rc);
+		}
+	}
+	return;
+}
 
-#if 0
+
 int nfc_power_onoff(struct pn547_dev *data, bool onoff)
 {
 	int ret = -1;
@@ -412,7 +452,8 @@ int nfc_power_onoff(struct pn547_dev *data, bool onoff)
 	}
 	return 0;
 }
-#endif
+
+*/
 
 #ifdef CONFIG_NFC_PN547_8916_CLK_CTL
 #ifdef CONFIG_PM
@@ -473,12 +514,8 @@ static int pn547_parse_dt(struct device *dev,
 
 	pdata->firm_gpio = of_get_named_gpio_flags(np, "pn547,firm-gpio",
 		0, &pdata->firm_gpio_flags);
-#ifdef CONFIG_NFC_PN547_USE_EXTERNAL_LDO_VIO
-	pdata->vio_gpio = of_get_named_gpio_flags(np, "pn547,vio-gpio",
-		0, &pdata->vio_gpio_flags);
-#endif
 #ifdef CONFIG_NFC_PN547_8916_USE_BBCLK2
-	pdata->nfc_clock = clk_get(dev, "nfc_clock");
+  	pdata->nfc_clock = clk_get(dev, "nfc_clock");
 	if (IS_ERR(pdata->nfc_clock)) {
 		pr_err("[NFC] %s: Couldn't get D1)\n",
 					__func__);
@@ -518,14 +555,12 @@ static int pn547_probe(struct i2c_client *client,
 	struct pinctrl *nfc_pinctrl;
 	struct pinctrl_state *nfc_suspend;
 	struct pinctrl_state *nfc_active;
-	//nfc_power_onoff(1);
-	//msleep(20);
 
 	if (client->dev.of_node) {
 		platform_data = devm_kzalloc(&client->dev,
 			sizeof(struct pn547_i2c_platform_data), GFP_KERNEL);
 		if (!platform_data) {
-			dev_err(&client->dev, "Failed to allocate memory\n");
+			pr_err("%s Failed to allocate memory\n", __func__);
 			return -ENOMEM;
 		}
 		err = pn547_parse_dt(&client->dev, platform_data);
@@ -554,16 +589,11 @@ static int pn547_probe(struct i2c_client *client,
 	ret = gpio_request(platform_data->firm_gpio, "nfc_firm");
 	if (ret)
 		goto err_firm;
-#ifdef CONFIG_NFC_PN547_USE_EXTERNAL_LDO_VIO
-	ret = gpio_request(platform_data->vio_gpio, "nfc_vio");
-	if (ret)
-		goto err_vio;
-#endif
 
 	/* Get pinctrl if target uses pinctrl */
 	nfc_pinctrl = devm_pinctrl_get(&client->dev);
 	if (IS_ERR(nfc_pinctrl)) {
-		pr_debug("Target does not use pinctrl\n");
+		pr_info("Target does not use pinctrl\n");
 		nfc_pinctrl = NULL;
 	} else {
 		nfc_suspend = pinctrl_lookup_state(nfc_pinctrl, "nfc_suspend");
@@ -603,13 +633,8 @@ static int pn547_probe(struct i2c_client *client,
 	pn547_dev->ven_gpio = platform_data->ven_gpio;
 	pn547_dev->firm_gpio = platform_data->firm_gpio;
 	pn547_dev->conf_gpio = platform_data->conf_gpio;
-#ifdef CONFIG_NFC_PN547_USE_EXTERNAL_LDO_VIO
-	pn547_dev->vio_gpio = platform_data->vio_gpio;
-#endif
-
-#ifdef CONFIG_NFC_PN547_8916_USE_BBCLK2
 	pn547_dev->nfc_clock = platform_data->nfc_clock;
-#endif
+
 	pn547_dev->client = client;
 #ifdef CONFIG_NFC_PN547_8916_CLK_CTL
 	pn547_dev->nfc_enable = 0;
@@ -639,17 +664,12 @@ static int pn547_probe(struct i2c_client *client,
 	gpio_direction_input(pn547_dev->irq_gpio);
 	gpio_direction_output(pn547_dev->ven_gpio, 0);
 	gpio_direction_output(pn547_dev->firm_gpio, 0);
-#ifdef CONFIG_NFC_PN547_USE_EXTERNAL_LDO_VIO
-	gpio_direction_output(pn547_dev->vio_gpio, 1);
-#endif
 
 	i2c_set_clientdata(client, pn547_dev);
 	wake_lock_init(&pn547_dev->nfc_wake_lock,
 			WAKE_LOCK_SUSPEND, "nfc_wake_lock");
 
-#if 0
-	nfc_power_onoff(pn547_dev,1);
-#endif
+	//nfc_power_onoff(pn547_dev,1);
 
 	ret = request_irq(client->irq, pn547_dev_irq_handler,
 			  IRQF_TRIGGER_RISING, "pn547", pn547_dev);
@@ -668,9 +688,6 @@ static int pn547_probe(struct i2c_client *client,
 	usleep_range(4900, 5000);
 	gpio_set_value(pn547_dev->ven_gpio, 1);
 	usleep_range(4900, 5000);
-#ifdef CONFIG_NFC_PN547_USE_EXTERNAL_LDO_VIO
-	gpio_set_value(pn547_dev->vio_gpio, 1);
-#endif
 
 	gpio_set_value(pn547_dev->ven_gpio, 0);
 	gpio_set_value(pn547_dev->firm_gpio, 0); /* add */
@@ -689,10 +706,6 @@ err_misc_register:
 	mutex_destroy(&pn547_dev->read_mutex);
 	kfree(pn547_dev);
 err_exit:
-#ifdef CONFIG_NFC_PN547_USE_EXTERNAL_LDO_VIO
-	gpio_free(platform_data->vio_gpio);
-err_vio:
-#endif
 	gpio_free(platform_data->firm_gpio);
 err_firm:
 	gpio_free(platform_data->ven_gpio);
@@ -718,9 +731,6 @@ static int pn547_remove(struct i2c_client *client)
 	gpio_free(pn547_dev->irq_gpio);
 	gpio_free(pn547_dev->ven_gpio);
 	gpio_free(pn547_dev->firm_gpio);
-#ifdef CONFIG_NFC_PN547_USE_EXTERNAL_LDO_VIO
-	gpio_free(pn547_dev->vio_gpio);
-#endif
 	kfree(pn547_dev);
 
 	return 0;
@@ -741,9 +751,6 @@ static struct of_device_id nfc_match_table[] = {
 #endif
 
 static struct i2c_driver pn547_driver = {
-	.id_table = pn547_id,
-	.probe = pn547_probe,
-	.remove = pn547_remove,
 	.driver = {
 		.owner = THIS_MODULE,
 		.name = "pn547",
@@ -754,6 +761,9 @@ static struct i2c_driver pn547_driver = {
 #endif
 		.of_match_table = nfc_match_table,
 	},
+	.id_table = pn547_id,
+	.probe = pn547_probe,
+	.remove = pn547_remove,
 };
 
 /*

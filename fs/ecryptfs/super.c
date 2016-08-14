@@ -155,8 +155,10 @@ static int ecryptfs_show_options(struct seq_file *m, struct dentry *root)
 	struct super_block *sb = root->d_sb;
 	struct ecryptfs_mount_crypt_stat *mount_crypt_stat =
 		&ecryptfs_superblock_to_private(sb)->mount_crypt_stat;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	struct ecryptfs_propagate_stat *propagate_stat =
 		&ecryptfs_superblock_to_private(sb)->propagate_stat;
+#endif
 	struct ecryptfs_global_auth_tok *walker;
 
 	mutex_lock(&mount_crypt_stat->global_auth_tok_list_mutex);
@@ -295,7 +297,7 @@ const struct super_operations ecryptfs_sops = {
 #endif
 };
 
-#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 const struct super_operations ecryptfs_multimount_sops = {
 	.alloc_inode = ecryptfs_alloc_inode,
 	.destroy_inode = ecryptfs_destroy_inode,

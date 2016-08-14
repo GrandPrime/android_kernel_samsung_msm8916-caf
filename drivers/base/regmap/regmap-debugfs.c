@@ -145,11 +145,7 @@ static unsigned int regmap_debugfs_get_dump_start(struct regmap *map,
 			reg_offset = fpos_offset / map->debugfs_tot_len;
 			*pos = c->min + (reg_offset * map->debugfs_tot_len);
 			mutex_unlock(&map->cache_lock);
-#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 			return c->base_reg + reg_offset;
-#else
-			return c->base_reg + (reg_offset * map->reg_stride);
-#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 		}
 
 		*pos = c->max;
@@ -252,7 +248,12 @@ static ssize_t regmap_map_read_file(struct file *file, char __user *user_buf,
 				   count, ppos);
 }
 
-#if IS_ENABLED(CONFIG_REGMAP_ALLOW_WRITE_DEBUGFS)
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+#undef REGMAP_ALLOW_WRITE_DEBUGFS
+#else
+#define REGMAP_ALLOW_WRITE_DEBUGFS
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
+#ifdef REGMAP_ALLOW_WRITE_DEBUGFS
 /*
  * This can be dangerous especially when we have clients such as
  * PMICs, therefore don't provide any real compile time configuration option
@@ -463,20 +464,16 @@ void regmap_debugfs_init(struct regmap *map, const char *name)
 {
 	struct rb_node *next;
 	struct regmap_range_node *range_node;
-	const char *devname = "dummy";
 
 	INIT_LIST_HEAD(&map->debugfs_off_cache);
 	mutex_init(&map->cache_lock);
 
-	if (map->dev)
-		devname = dev_name(map->dev);
-
 	if (name) {
 		map->debugfs_name = kasprintf(GFP_KERNEL, "%s-%s",
-					      devname, name);
+					      dev_name(map->dev), name);
 		name = map->debugfs_name;
 	} else {
-		name = devname;
+		name = dev_name(map->dev);
 	}
 
 	map->debugfs = debugfs_create_dir(name, regmap_debugfs_root);
@@ -492,14 +489,7 @@ void regmap_debugfs_init(struct regmap *map, const char *name)
 			    map, &regmap_reg_ranges_fops);
 
 	if (map->max_register) {
-		umode_t registers_mode;
-
-		if (IS_ENABLED(CONFIG_REGMAP_ALLOW_WRITE_DEBUGFS))
-			registers_mode = 0600;
-		else
-			registers_mode = 0400;
-
-		debugfs_create_file("registers", registers_mode, map->debugfs,
+		debugfs_create_file("registers", 0400, map->debugfs,
 				    map, &regmap_map_fops);
 		debugfs_create_file("access", 0400, map->debugfs,
 				    map, &regmap_access_fops);

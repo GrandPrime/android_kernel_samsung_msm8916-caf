@@ -93,6 +93,7 @@ static inline long ldsem_atomic_update(long delta, struct ld_semaphore *sem)
  */
 static inline int ldsem_cmpxchg(long *old, long new, struct ld_semaphore *sem)
 {
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	long tmp = atomic_long_cmpxchg(&sem->count, *old, new);
 	if (tmp == *old) {
 		*old = new;
@@ -101,6 +102,11 @@ static inline int ldsem_cmpxchg(long *old, long new, struct ld_semaphore *sem)
 		*old = tmp;
 		return 0;
 	}
+#else
+	long tmp = *old;
+	*old = atomic_long_cmpxchg(&sem->count, *old, new);
+	return *old == tmp;
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 }
 
 /*

@@ -1468,6 +1468,45 @@ bool is_vma_temporary_stack(struct vm_area_struct *vma)
  * vm_flags for that VMA.  That should be OK, because that vma shouldn't be
  * 'LOCKED.
  */
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+static int try_to_unmap_anon(struct page *page, enum ttu_flags flags)
+{
+	struct anon_vma *anon_vma;
+	pgoff_t pgoff;
+	struct anon_vma_chain *avc;
+	int ret = SWAP_AGAIN;
+
+	anon_vma = page_lock_anon_vma_read(page);
+	if (!anon_vma)
+		return ret;
+
+	pgoff = page->index << (PAGE_CACHE_SHIFT - PAGE_SHIFT);
+	anon_vma_interval_tree_foreach(avc, &anon_vma->rb_root, pgoff, pgoff) {
+		struct vm_area_struct *vma = avc->vma;
+		unsigned long address;
+
+		/*
+		 * During exec, a temporary VMA is setup and later moved.
+		 * The VMA is moved under the anon_vma lock but not the
+		 * page tables leading to a race where migration cannot
+		 * find the migration ptes. Rather than increasing the
+		 * locking requirements of exec(), migration skips
+		 * temporary VMAs until after exec() completes.
+		 */
+		if (IS_ENABLED(CONFIG_MIGRATION) && (flags & TTU_MIGRATION) &&
+				is_vma_temporary_stack(vma))
+			continue;
+
+		address = vma_address(page, vma);
+		ret = try_to_unmap_one(page, vma, address, flags);
+		if (ret != SWAP_AGAIN || !page_mapped(page))
+			break;
+	}
+
+	page_unlock_anon_vma_read(anon_vma);
+	return ret;
+}
+#else
 static int try_to_unmap_anon(struct page *page, enum ttu_flags flags,
 					struct vm_area_struct *target_vma)
 {
@@ -1476,13 +1515,11 @@ static int try_to_unmap_anon(struct page *page, enum ttu_flags flags,
 	struct anon_vma *anon_vma;
 	pgoff_t pgoff;
 	struct anon_vma_chain *avc;
-	
-#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+
 	if (target_vma) {
 		address = vma_address(page, target_vma);
 		return try_to_unmap_one(page, target_vma, address, flags);
 	}
-#endif
 
 	anon_vma = page_lock_anon_vma_read(page);
 	if (!anon_vma)
@@ -1513,6 +1550,7 @@ static int try_to_unmap_anon(struct page *page, enum ttu_flags flags,
 	page_unlock_anon_vma_read(anon_vma);
 	return ret;
 }
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 
 /**
  * try_to_unmap_file - unmap/unlock file page using the object-based rmap method
@@ -1530,8 +1568,12 @@ static int try_to_unmap_anon(struct page *page, enum ttu_flags flags,
  * vm_flags for that VMA.  That should be OK, because that vma shouldn't be
  * 'LOCKED.
  */
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+static int try_to_unmap_file(struct page *page, enum ttu_flags flags)
+#else
 static int try_to_unmap_file(struct page *page, enum ttu_flags flags,
 				struct vm_area_struct *target_vma)
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 {
 	struct address_space *mapping = page->mapping;
 	pgoff_t pgoff = page->index << (PAGE_CACHE_SHIFT - PAGE_SHIFT);
@@ -1541,12 +1583,21 @@ static int try_to_unmap_file(struct page *page, enum ttu_flags flags,
 	unsigned long max_nl_cursor = 0;
 	unsigned long max_nl_size = 0;
 	unsigned int mapcount;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	unsigned long address;
+#endif
 
 	if (PageHuge(page))
 		pgoff = page->index << compound_order(page);
 
 	mutex_lock(&mapping->i_mmap_mutex);
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	vma_interval_tree_foreach(vma, &mapping->i_mmap, pgoff, pgoff) {
+		unsigned long address = vma_address(page, vma);
+		ret = try_to_unmap_one(page, vma, address, flags);
+		if (ret != SWAP_AGAIN || !page_mapped(page))
+			goto out;
+#else
 	if (target_vma) {
 		/* We don't handle non-linear vma on ramfs */
 		if (unlikely(!list_empty(&mapping->i_mmap_nonlinear)))
@@ -1561,6 +1612,7 @@ static int try_to_unmap_file(struct page *page, enum ttu_flags flags,
 			if (ret != SWAP_AGAIN || !page_mapped(page))
 				goto out;
 		}
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	}
 
 	if (list_empty(&mapping->i_mmap_nonlinear))
@@ -1654,20 +1706,33 @@ out:
  * SWAP_FAIL	- the page is unswappable
  * SWAP_MLOCK	- page is mlocked.
  */
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+int try_to_unmap(struct page *page, enum ttu_flags flags)
+#else
 int try_to_unmap(struct page *page, enum ttu_flags flags,
 				struct vm_area_struct *vma)
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 {
 	int ret;
 
 	BUG_ON(!PageLocked(page));
 	VM_BUG_ON(!PageHuge(page) && PageTransHuge(page));
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	if (unlikely(PageKsm(page)))
+		ret = try_to_unmap_ksm(page, flags);
+	else if (PageAnon(page))
+		ret = try_to_unmap_anon(page, flags);
+	else
+		ret = try_to_unmap_file(page, flags);
+#else
 	if (unlikely(PageKsm(page)))
 		ret = try_to_unmap_ksm(page, flags, vma);
 	else if (PageAnon(page))
 		ret = try_to_unmap_anon(page, flags, vma);
 	else
 		ret = try_to_unmap_file(page, flags, vma);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	if (ret != SWAP_MLOCK && !page_mapped(page))
 		ret = SWAP_SUCCESS;
 	return ret;
@@ -1691,7 +1756,15 @@ int try_to_unmap(struct page *page, enum ttu_flags flags,
 int try_to_munlock(struct page *page)
 {
 	VM_BUG_ON(!PageLocked(page) || PageLRU(page));
-
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	if (unlikely(PageKsm(page)))
+		return try_to_unmap_ksm(page, TTU_MUNLOCK);
+	else if (PageAnon(page))
+		return try_to_unmap_anon(page, TTU_MUNLOCK);
+	else
+		return try_to_unmap_file(page, TTU_MUNLOCK);
+}
+#else
 	if (unlikely(PageKsm(page)))
 		return try_to_unmap_ksm(page, TTU_MUNLOCK, NULL);
 	else if (PageAnon(page))
@@ -1699,6 +1772,7 @@ int try_to_munlock(struct page *page)
 	else
 		return try_to_unmap_file(page, TTU_MUNLOCK, NULL);
 }
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 
 void __put_anon_vma(struct anon_vma *anon_vma)
 {

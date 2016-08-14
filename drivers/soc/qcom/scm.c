@@ -27,6 +27,15 @@
 #include <linux/sec_debug.h>
 #endif
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+#include <linux/thread_info.h>
+#include <linux/sched.h>
+#include <linux/string.h>
+#if defined(CONFIG_ARCH_MSM8916) || defined(CONFIG_ARCH_MSM8939) || defined(CONFIG_ARCH_MSM8226)
+#include <linux/smp.h>
+#endif
+#endif /* not CONFIG_SEC_FORTUNA_PROJECT */
+
 #define SCM_ENOMEM		-5
 #define SCM_EOPNOTSUPP		-4
 #define SCM_EINVAL_ADDR		-3
@@ -39,7 +48,11 @@
 static DEFINE_MUTEX(scm_lock);
 
 #define SCM_EBUSY_WAIT_MS 30
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 #define SCM_EBUSY_MAX_RETRY 20
+#else
+#define SCM_EBUSY_MAX_RETRY 400
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 
 #define N_EXT_SCM_ARGS 7
 #define FIRST_EXT_ARG_IDX 3
@@ -207,7 +220,6 @@ static void __wrap_flush_cache_all(void* vp)
 	flush_cache_all();
 }
 #endif
-
 
 static int __scm_call(const struct scm_command *cmd)
 {
@@ -686,7 +698,6 @@ int scm_call2(u32 fn_id, struct scm_desc *desc)
 			outer_flush_all();
 #endif
 		}
-
 
 		if (scm_version == SCM_ARMV8_64)
 			ret = __scm_call_armv8_64(x0, desc->arginfo,

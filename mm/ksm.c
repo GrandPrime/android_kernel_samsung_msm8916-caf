@@ -859,7 +859,11 @@ static int memcmp_pages(struct page *page1, struct page *page2)
 
 	addr1 = kmap_atomic(page1);
 	addr2 = kmap_atomic(page2);
+#ifdef CONFIG_ADAPTIVE_KSM
+	ret = page_memcmp((long *)addr1, (long *)addr2, PAGE_SIZE);
+#else
 	ret = memcmp(addr1, addr2, PAGE_SIZE);
+#endif
 	kunmap_atomic(addr2);
 	kunmap_atomic(addr1);
 	return ret;
@@ -2003,8 +2007,12 @@ out:
 	return referenced;
 }
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+int try_to_unmap_ksm(struct page *page, enum ttu_flags flags)
+#else
 int try_to_unmap_ksm(struct page *page, enum ttu_flags flags,
 			struct vm_area_struct *target_vma)
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 {
 	struct stable_node *stable_node;
 	struct rmap_item *rmap_item;
@@ -2018,11 +2026,13 @@ int try_to_unmap_ksm(struct page *page, enum ttu_flags flags,
 	if (!stable_node)
 		return SWAP_FAIL;
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	if (target_vma) {
 		unsigned long address = vma_address(page, target_vma);
 		ret = try_to_unmap_one(page, target_vma, address, flags);
 		goto out;
 	}
+#endif
 again:
 	hlist_for_each_entry(rmap_item, &stable_node->hlist, hlist) {
 		struct anon_vma *anon_vma = rmap_item->anon_vma;

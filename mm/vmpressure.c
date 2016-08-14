@@ -21,9 +21,11 @@
 #include <linux/eventfd.h>
 #include <linux/swap.h>
 #include <linux/printk.h>
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 #include <linux/notifier.h>
 #include <linux/init.h>
 #include <linux/module.h>
+#endif
 #include <linux/vmpressure.h>
 
 /*
@@ -51,8 +53,14 @@ static const unsigned long vmpressure_win = SWAP_CLUSTER_MAX * 16;
 static const unsigned int vmpressure_level_med = 60;
 static const unsigned int vmpressure_level_critical = 95;
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 static unsigned long vmpressure_scale_max = 100;
 module_param_named(vmpressure_scale_max, vmpressure_scale_max,
+			ulong, S_IRUGO | S_IWUSR);
+
+/* vmpressure values >= this will be scaled based on allocstalls */
+static unsigned long allocstall_threshold = 70;
+module_param_named(allocstall_threshold, allocstall_threshold,
 			ulong, S_IRUGO | S_IWUSR);
 
 static struct vmpressure global_vmpressure;
@@ -72,7 +80,7 @@ void vmpressure_notify(unsigned long pressure)
 {
 	blocking_notifier_call_chain(&vmpressure_notifier, pressure, NULL);
 }
-
+#endif
 /*
  * When there are too little pages left to scan, vmpressure() may miss the
  * critical pressure as number of pages will be less than "window size".
@@ -99,7 +107,7 @@ static struct vmpressure *work_to_vmpressure(struct work_struct *work)
 	return container_of(work, struct vmpressure, work);
 }
 
-#ifdef CONFIG_MEMCG
+#if defined(CONFIG_MEMCG) || defined(CONFIG_SEC_FORTUNA_PROJECT)
 static struct vmpressure *cg_to_vmpressure(struct cgroup *cg)
 {
 	return css_to_vmpressure(cgroup_subsys_state(cg, mem_cgroup_subsys_id));
@@ -149,7 +157,11 @@ static enum vmpressure_levels vmpressure_level(unsigned long pressure)
 	return VMPRESSURE_LOW;
 }
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+static enum vmpressure_levels vmpressure_calc_level(unsigned long scanned,
+#else
 static unsigned long vmpressure_calc_pressure(unsigned long scanned,
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 						    unsigned long reclaimed)
 {
 	unsigned long scale = scanned + reclaimed;
@@ -168,16 +180,24 @@ static unsigned long vmpressure_calc_pressure(unsigned long scanned,
 	pr_debug("%s: %3lu  (s: %lu  r: %lu)\n", __func__, pressure,
 		 scanned, reclaimed);
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	return vmpressure_level(pressure);
+#else
 	return pressure;
 }
 
 static unsigned long vmpressure_account_stall(unsigned long pressure,
 				unsigned long stall, unsigned long scanned)
 {
-	unsigned long scale =
-		((vmpressure_scale_max - pressure) * stall) / scanned;
+	unsigned long scale;
+
+	if (pressure < allocstall_threshold)
+		return pressure;
+
+	scale = ((vmpressure_scale_max - pressure) * stall) / scanned;
 
 	return pressure + scale;
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 }
 
 struct vmpressure_event {
@@ -191,11 +211,17 @@ static bool vmpressure_event(struct vmpressure *vmpr,
 {
 	struct vmpressure_event *ev;
 	enum vmpressure_levels level;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	unsigned long pressure;
+#endif
 	bool signalled = false;
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	level = vmpressure_calc_level(scanned, reclaimed);
+#else
 	pressure = vmpressure_calc_pressure(scanned, reclaimed);
 	level = vmpressure_level(pressure);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 
 	mutex_lock(&vmpr->events_lock);
 
@@ -245,12 +271,31 @@ static void vmpressure_work_fn(struct work_struct *work)
 	} while ((vmpr = vmpressure_parent(vmpr)));
 }
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+/**
+ * vmpressure() - Account memory pressure through scanned/reclaimed ratio
+ * @gfp:	reclaimer's gfp mask
+ * @memcg:	cgroup memory controller handle
+ * @scanned:	number of pages scanned
+ * @reclaimed:	number of pages reclaimed
+ *
+ * This function should be called from the vmscan reclaim path to account
+ * "instantaneous" memory pressure (scanned/reclaimed ratio). The raw
+ * pressure index is then further refined and averaged over time.
+ *
+ * This function does not return any value.
+ */
+void vmpressure(gfp_t gfp, struct mem_cgroup *memcg,
+#else
 void vmpressure_memcg(gfp_t gfp, struct mem_cgroup *memcg,
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 		unsigned long scanned, unsigned long reclaimed)
 {
 	struct vmpressure *vmpr = memcg_to_vmpressure(memcg);
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	BUG_ON(!vmpr);
+#endif
 
 	/*
 	 * Here we only want to account pressure that userland is able to
@@ -288,6 +333,7 @@ void vmpressure_memcg(gfp_t gfp, struct mem_cgroup *memcg,
 	schedule_work(&vmpr->work);
 }
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 void vmpressure_global(gfp_t gfp, unsigned long scanned,
 		unsigned long reclaimed)
 {
@@ -349,7 +395,7 @@ void vmpressure(gfp_t gfp, struct mem_cgroup *memcg,
 	if (IS_ENABLED(CONFIG_MEMCG))
 		vmpressure_memcg(gfp, memcg, scanned, reclaimed);
 }
-
+#endif
 /**
  * vmpressure_prio() - Account memory pressure through reclaimer priority level
  * @gfp:	reclaimer's gfp mask
@@ -404,7 +450,9 @@ int vmpressure_register_event(struct cgroup *cg, struct cftype *cft,
 	struct vmpressure_event *ev;
 	int level;
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	BUG_ON(!vmpr);
+#endif
 
 	for (level = 0; level < VMPRESSURE_NUM_LEVELS; level++) {
 		if (!strcmp(vmpressure_str_levels[level], args))
@@ -448,8 +496,10 @@ void vmpressure_unregister_event(struct cgroup *cg, struct cftype *cft,
 	struct vmpressure *vmpr = cg_to_vmpressure(cg);
 	struct vmpressure_event *ev;
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	if (!vmpr)
 		BUG();
+#endif
 
 	mutex_lock(&vmpr->events_lock);
 	list_for_each_entry(ev, &vmpr->events, node) {
@@ -477,9 +527,11 @@ void vmpressure_init(struct vmpressure *vmpr)
 	INIT_WORK(&vmpr->work, vmpressure_work_fn);
 }
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 int vmpressure_global_init(void)
 {
 	vmpressure_init(&global_vmpressure);
 	return 0;
 }
 late_initcall(vmpressure_global_init);
+#endif

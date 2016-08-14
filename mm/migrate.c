@@ -834,8 +834,12 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 	}
 
 	/* Establish migration ptes or remove ptes */
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	try_to_unmap(page, TTU_MIGRATION|TTU_IGNORE_MLOCK|TTU_IGNORE_ACCESS);
+#else
 	try_to_unmap(page, TTU_MIGRATION|TTU_IGNORE_MLOCK|TTU_IGNORE_ACCESS,
 			NULL);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 
 skip_unmap:
 	if (!page_mapped(page))
@@ -971,8 +975,12 @@ static int unmap_and_move_huge_page(new_page_t get_new_page,
 	if (PageAnon(hpage))
 		anon_vma = page_get_anon_vma(hpage);
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	try_to_unmap(hpage, TTU_MIGRATION|TTU_IGNORE_MLOCK|TTU_IGNORE_ACCESS);
+#else
 	try_to_unmap(hpage, TTU_MIGRATION|TTU_IGNORE_MLOCK|TTU_IGNORE_ACCESS,
 						NULL);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 
 	if (!page_mapped(hpage))
 		rc = move_to_new_page(new_hpage, hpage, 1, mode);

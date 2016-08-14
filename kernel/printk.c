@@ -2100,8 +2100,7 @@ static void sec_log_add_on_bootup(void)
 	}
 }
 
-/* This is temporarily disabled until we get support from Bootloader */
-#ifdef CONFIG_SEC_DEBUG_SUBSYS && defined(CONFIG_SEC_FORTUNA_PROJECT)
+#ifdef CONFIG_SEC_DEBUG_SUBSYS
 void sec_debug_subsys_set_kloginfo(unsigned int *first_idx_paddr,
 	unsigned int *next_idx_paddr, unsigned int *log_paddr,
 	unsigned int *size)
@@ -2217,7 +2216,7 @@ static int __init printk_remap_nocache(void)
 
 	raw_spin_lock_irqsave(&logbuf_lock, flags);
 	/*We have to save logs printed prior to
-	the sec log initialization here.*/
+	  the sec log initialization here.*/
 	sec_log_add_on_bootup();
 	raw_spin_unlock_irqrestore(&logbuf_lock, flags);
 #if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP) && defined(CONFIG_SEC_LOG_LAST_KMSG)

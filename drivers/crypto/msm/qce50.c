@@ -124,6 +124,11 @@ static uint32_t _std_init_vector_sha256[] = {
 	0x510E527F, 0x9B05688C,	0x1F83D9AB, 0x5BE0CD19
 };
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+void * j_debug;
+EXPORT_SYMBOL(j_debug);
+#endif
+
 static void _byte_stream_to_net_words(uint32_t *iv, unsigned char *b,
 		unsigned int len)
 {
@@ -4405,6 +4410,9 @@ static int _qce_suspend(void *handle)
 	if (handle == NULL)
 		return -ENODEV;
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	j_debug = handle;
+#endif
 	qce_enable_clk(pce_dev);
 
 	sps_pipe_info = pce_dev->ce_sps.consumer.pipe;
@@ -4413,6 +4421,9 @@ static int _qce_suspend(void *handle)
 	sps_pipe_info = pce_dev->ce_sps.producer.pipe;
 	sps_disconnect(sps_pipe_info);
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	j_debug = 0;
+#endif
 	qce_disable_clk(pce_dev);
 	return 0;
 }
@@ -5361,6 +5372,16 @@ int qce_disable_clk(void *handle)
 	struct qce_device *pce_dev = (struct qce_device *) handle;
 	int rc = 0;
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	pr_info("QMCK: %s start\n",__func__);
+ 
+	if (j_debug){
+		pr_err("QMCK: Disabling qce clk while handling _qce_suspend j_debug: %lx pce_dev : %lx", (unsigned long)j_debug,(unsigned long)(pce_dev));
+		pr_err("QMCK: j_debug->ce_bus_clk(%lx) pce_dev->ce_bus_clk(%lx)", (unsigned long)(((struct qce_device *)(j_debug))->ce_bus_clk),(unsigned long)(pce_dev->ce_bus_clk));
+		dump_stack();
+	}
+#endif
+
 	if (pce_dev->ce_bus_clk)
 		clk_disable_unprepare(pce_dev->ce_bus_clk);
 	if (pce_dev->ce_clk)
@@ -5373,6 +5394,9 @@ int qce_disable_clk(void *handle)
 			clk_disable_unprepare(pce_dev->ce_core_clk);
 	}
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	pr_info("QMCK: %s end\n",__func__);
+#endif
 	return rc;
 }
 EXPORT_SYMBOL(qce_disable_clk);

@@ -894,7 +894,11 @@ static void msm_rpm_smd_work(struct work_struct *work)
 	char buf[MAX_ERR_BUFFER_SIZE] = {0};
 
 	while (1) {
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+		wait_for_completion(&data_ready);
+#else
 		wait_for_completion_interruptible(&data_ready);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 
 		spin_lock(&msm_rpm_data.smd_lock_read);
 		while (smd_is_pkt_avail(msm_rpm_data.ch_info)) {

@@ -450,9 +450,7 @@ static void qcrypto_ce_set_bus(struct crypto_engine *pengine,
 	int ret = 0;
 
 	if (high_bw_req) {
-#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 		pm_stay_awake(&pengine->pdev->dev);
-#endif
 		ret = qce_enable_clk(pengine->qce);
 		if (ret) {
 			pr_err("%s Unable enable clk\n", __func__);
@@ -466,7 +464,10 @@ static void qcrypto_ce_set_bus(struct crypto_engine *pengine,
 			qce_disable_clk(pengine->qce);
 			goto clk_err;
 		}
+
+
 	} else {
+
 		ret = msm_bus_scale_client_update_request(
 				pengine->bus_scale_handle, 0);
 		if (ret) {
@@ -484,17 +485,11 @@ static void qcrypto_ce_set_bus(struct crypto_engine *pengine,
 						__func__);
 			goto clk_err;
 		}
-#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 		pm_relax(&pengine->pdev->dev);
-#endif
 	}
-#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	return;
-#endif
 clk_err:
-#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	pm_relax(&pengine->pdev->dev);
-#endif
 	return;
 
 }
@@ -1056,9 +1051,7 @@ static void _qcrypto_remove_engine(struct crypto_engine *pengine)
 	cancel_work_sync(&pengine->bw_reaper_ws);
 	cancel_work_sync(&pengine->bw_allocate_ws);
 	del_timer_sync(&pengine->bw_reaper_timer);
-#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	device_init_wakeup(&pengine->pdev->dev, false);
-#endif
 
 	if (pengine->bus_scale_handle != 0)
 		msm_bus_scale_unregister_client(pengine->bus_scale_handle);
@@ -4515,9 +4508,7 @@ static int  _qcrypto_probe(struct platform_device *pdev)
 	pengine->active_seq = 0;
 	pengine->last_active_seq = 0;
 	pengine->check_flag = false;
-#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	device_init_wakeup(&pengine->pdev->dev, true);
-#endif
 
 	tasklet_init(&pengine->done_tasklet, req_done, (unsigned long)pengine);
 	crypto_init_queue(&pengine->req_queue, MSM_QCRYPTO_REQ_QUEUE_LENGTH);
@@ -4913,13 +4904,16 @@ static int _qcrypto_engine_in_use(struct crypto_engine *pengine)
 {
 #if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	if (pengine->req || pengine->req_queue.qlen)
+		return 1;
+	else
+		return 0;
 #else
 	struct crypto_priv *cp = pengine->pcp;
 
 	if (pengine->req || pengine->req_queue.qlen || cp->req_queue.qlen)
-#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 		return 1;
 	return 0;
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 }
 
 static void _qcrypto_do_suspending(struct crypto_engine *pengine)

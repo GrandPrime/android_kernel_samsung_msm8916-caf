@@ -447,13 +447,23 @@ void board_battery_init(struct platform_device *pdev, struct sec_battery_info *b
 
 #if defined(CONFIG_SEC_FORTUNA_PROJECT)
 void board_fuelgauge_init(struct sec_fuelgauge_info *fuelgauge)
+{
+#if defined(CONFIG_SEC_HESTIA2_PROJECT)
+	if (!fuelgauge->pdata->battery_data) {
+		pr_info("%s : assign battery data\n", __func__);
+			fuelgauge->pdata->battery_data = (void *)samsung_battery_data;
+	}
+#elif defined(CONFIG_FUELGAUGE_STC3117)
+	fuelgauge->pdata->battery_data = stc3117_battery_data;
+#endif
+	fuelgauge->pdata->capacity_max = CAPACITY_MAX;
+	fuelgauge->pdata->capacity_max_margin = CAPACITY_MAX_MARGIN;
+	fuelgauge->pdata->capacity_min = CAPACITY_MIN;
+}
 #else
 void board_fuelgauge_init(void * data)
-#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 {
-#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	if(data) {
-#endif
 #if defined(CONFIG_FUELGAUGE_MAX77849)
 		struct max77849_fuelgauge_info *fuelgauge =
 			(struct max77849_fuelgauge_info *)data;
@@ -462,32 +472,27 @@ void board_fuelgauge_init(void * data)
 			(struct sec_fuelgauge_info *)data;
 		fuelgauge->pdata->battery_data = stc3117_battery_data;
 #else
-if !defined(CONFIG_FUELGAUGE_MAX77843) && !defined(CONFIG_SEC_FORTUNA_PROJECT)
+#if !defined(CONFIG_FUELGAUGE_MAX77843)
 	struct sec_fuelgauge_info *fuelgauge =
 		(struct sec_fuelgauge_info *)data;
 #endif
 #endif
 
 #if !defined(CONFIG_FUELGAUGE_MAX77843)
-#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	if(fuelgauge) {
-#endif
 		fuelgauge->pdata->capacity_max = CAPACITY_MAX;
 		fuelgauge->pdata->capacity_max_margin = CAPACITY_MAX_MARGIN;
 		fuelgauge->pdata->capacity_min = CAPACITY_MIN;
-#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	}
-#endif
 #endif
 
 #if defined(CONFIG_SEC_GT58_PROJECT) || defined(CONFIG_SEC_GT510_PROJECT)
 		fuelgauge->pdata->temp_adc_table = temp_table;
 		fuelgauge->pdata->temp_adc_table_size = sizeof(temp_table)/sizeof(sec_bat_adc_table_data_t);
 #endif
-#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	}
-#endif
 }
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 
 void cable_initial_check(struct sec_battery_info *battery)
 {

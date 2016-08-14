@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -107,6 +107,13 @@ struct voice_dha_data {
 	short dha_mode;
 	short dha_select;
 	short dha_params[12];
+};
+
+enum {
+	LOOPBACK_DISABLE = 0,
+	LOOPBACK_ENABLE,
+	LOOPBACK_NODELAY,
+	LOOPBACK_MAX,
 };
 #endif /* CONFIG_SAMSUNG_AUDIO */
 
@@ -814,6 +821,11 @@ struct vss_icommon_cmd_set_ui_property_enable_t {
 
 #define VSS_ICOMMON_CMD_DHA_SET 0x0001128A
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+#define VOICE_ADDMODE_MODULE	0x10001001
+#define VOICE_ADDMODE_PARAM	0x10001023
+#endif
+
 struct vss_icommon_cmd_set_loopback_enable_t {
 	uint32_t module_id;
 	/* Unique ID of the module. */
@@ -849,6 +861,29 @@ struct oem_dha_parm_send_cmd {
 	uint32_t mem_size;
 	struct oem_dha_parm_send_t dha_send;
 } __packed;
+
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+struct oem_addMode_parm_send_t {
+	uint32_t module_id;
+	/* Unique ID of the module. */
+	uint32_t param_id;
+	/* Unique ID of the parameter. */
+	uint16_t param_size;
+	/* Size of the parameter in bytes: MOD_ENABLE_PARAM_LEN */
+	uint16_t reserved;
+	/* Reserved; set to 0. */
+	uint16_t enable;
+	uint16_t reserved_field;
+} __packed;
+
+struct oem_addMode_parm_send_cmd {
+	struct apr_hdr hdr;
+	uint32_t mem_handle;
+	uint64_t mem_address;
+	uint32_t mem_size;
+	struct oem_addMode_parm_send_t addMode_send;
+} __packed;
+#endif /* not CONFIG_SEC_FORTUNA_PROJECT */
 #endif /* CONFIG_SAMSUNG_AUDIO */
 
 /*
@@ -1491,6 +1526,10 @@ struct share_memory_info {
 	struct mem_map_table	memtbl;
 };
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+
+#endif
+
 struct voice_data {
 	int voc_state;/*INIT, CHANGE, RELEASE, RUN */
 
@@ -1603,6 +1642,13 @@ struct common_data {
 	bool is_vote_bms;
 	char cvd_version[CVD_VERSION_STRING_MAX_SIZE];
 	bool is_per_vocoder_cal_enabled;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	bool is_sound_focus_resp_success;
+	bool is_source_tracking_resp_success;
+	struct vss_isoundfocus_rsp_get_sectors_t soundFocusResponse;
+	struct shared_mem_info source_tracking_sh_mem;
+	struct vss_isourcetrack_activity_data_t sourceTrackingResponse;
+#endif
 };
 
 struct voice_session_itr {
@@ -1665,6 +1711,9 @@ enum {
 #ifdef CONFIG_SAMSUNG_AUDIO
 int voice_sec_set_dha_data(uint32_t session_id, short mode,
 					short select, short *parameters);
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+int voice_sec_set_addMode_data(uint32_t session_id, short enable);
+#endif
 #endif /* CONFIG_SAMSUNG_AUDIO */
 
 #define APP_ID_MASK         0x3F000
@@ -1740,6 +1789,11 @@ void voc_set_vote_bms_flag(bool is_vote_bms);
 int voc_disable_topology(uint32_t session_id, uint32_t disable);
 
 uint32_t voice_get_topology(uint32_t topology_idx);
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+int voc_set_sound_focus(struct sound_focus_param sound_focus_param);
+int voc_get_sound_focus(struct sound_focus_param *soundFocusData);
+int voc_get_source_tracking(struct source_tracking_param *sourceTrackingData);
+#endif
 
 #ifdef CONFIG_SAMSUNG_AUDIO
 int voc_get_loopback_enable(void);

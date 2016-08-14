@@ -104,11 +104,12 @@ enum sdc_mpm_pin_state {
 #define CORE_HC_SELECT_IN_HS400	(6 << 19)
 #define CORE_HC_SELECT_IN_MASK	(7 << 19)
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 #define CORE_VENDOR_SPEC_FUNC2	0x110
 #define HC_SW_RST_WAIT_IDLE_DIS	(1 << 20)
 #define HC_SW_RST_REQ		(1 << 21)
 #define CORE_ONE_MID_EN		(1 << 25)
-
+#endif
 #define CORE_VENDOR_SPEC_CAPABILITIES0	0x11C
 #define CORE_8_BIT_SUPPORT		(1 << 18)
 #define CORE_3_3V_SUPPORT		(1 << 24)
@@ -2132,6 +2133,10 @@ static irqreturn_t sdhci_msm_sdiowakeup_irq(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+void sdhci_dumpregs(struct sdhci_host *host);
+static int sdhci_msm_enable_controller_clock(struct sdhci_host *host);
+#endif
 static irqreturn_t sdhci_msm_pwr_irq(int irq, void *data)
 {
 	struct sdhci_host *host = (struct sdhci_host *)data;
@@ -2143,9 +2148,25 @@ static irqreturn_t sdhci_msm_pwr_irq(int irq, void *data)
 	int pwr_state = 0, io_level = 0;
 	unsigned long flags;
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	if (!IS_ERR(msm_host->pclk)) {
+		ret = clk_prepare_enable(msm_host->pclk);
+		if (ret)
+			pr_err("%s: %s: failed to enable the pclk with error %d\n",
+				mmc_hostname(host->mmc), __func__, ret);
+	}
+#endif
+
 	irq_status = readb_relaxed(msm_host->core_mem + CORE_PWRCTL_STATUS);
 	pr_debug("%s: Received IRQ(%d), status=0x%x\n",
 		mmc_hostname(msm_host->mmc), irq, irq_status);
+
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	if ((irq_status & msm_host->curr_pwr_state) ||
+		(irq_status & msm_host->curr_io_level))
+		pr_err("spurious IRQ 0x%x pwr_ctrl_reg 0x%x\n", irq_status,
+			readl_relaxed(msm_host->core_mem + CORE_PWRCTL_CTL));
+#endif
 
 	/* Clear the interrupt */
 	writeb_relaxed(irq_status, (msm_host->core_mem + CORE_PWRCTL_CLEAR));
@@ -2239,6 +2260,11 @@ static irqreturn_t sdhci_msm_pwr_irq(int irq, void *data)
 		msm_host->curr_io_level = io_level;
 	complete(&msm_host->pwr_irq_completion);
 	spin_unlock_irqrestore(&host->lock, flags);
+
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	if (!IS_ERR(msm_host->pclk)) 
+		clk_disable_unprepare(msm_host->pclk);
+#endif
 
 	return IRQ_HANDLED;
 }
@@ -2866,8 +2892,10 @@ void sdhci_msm_dump_vendor_regs(struct sdhci_host *host)
 		readl_relaxed(host->ioaddr + CORE_VENDOR_SPEC),
 		readl_relaxed(host->ioaddr + CORE_VENDOR_SPEC_ADMA_ERR_ADDR0),
 		readl_relaxed(host->ioaddr + CORE_VENDOR_SPEC_ADMA_ERR_ADDR1));
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	pr_info("Vndr func2: 0x%08x\n",
 		readl_relaxed(host->ioaddr + CORE_VENDOR_SPEC_FUNC2));
+#endif
 
 	/*
 	 * tbsel indicates [2:0] bits and tbsel2 indicates [7:4] bits
@@ -2897,8 +2925,38 @@ void sdhci_msm_dump_vendor_regs(struct sdhci_host *host)
 	/* Disable test bus */
 	writel_relaxed(~CORE_TESTBUS_ENA, msm_host->core_mem +
 			CORE_TESTBUS_CONFIG);
+
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	pr_info("PWRCTL_STATUS: 0x%08x | PWRCTL_MASK: 0x%08x | PWRCTL_CTL: 0x%08x\n",
+			readl_relaxed(msm_host->core_mem + CORE_PWRCTL_STATUS),
+			readl_relaxed(msm_host->core_mem + CORE_PWRCTL_MASK),
+			readl_relaxed(msm_host->core_mem + CORE_PWRCTL_CTL));
+
+	pr_info("-------- MCI Registers -------- \n");
+
+	for(i = 0;i < 0x1C0;i+=16) {
+		pr_info("0x%08X: 0x%08X 0x%08X 0x%08X 0x%08X\n",
+				i,
+				readl_relaxed(msm_host->core_mem + i),
+				readl_relaxed(msm_host->core_mem + i + 4),
+				readl_relaxed(msm_host->core_mem + i + 8),
+				readl_relaxed(msm_host->core_mem + i + 12));
+	}
+
+	pr_info("-------- HC Registers -------- \n");
+
+	for(i = 0;i < 0x1C0 ;i+=16) {
+		pr_info("0x%08X: 0x%08X 0x%08X 0x%08X 0x%08X\n",
+				i,
+				readl_relaxed(host->ioaddr + i),
+				readl_relaxed(host->ioaddr + i + 4),
+				readl_relaxed(host->ioaddr + i + 8),
+				readl_relaxed(host->ioaddr + i + 12));
+	}
+#endif
 }
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 void sdhci_msm_reset_workaround(struct sdhci_host *host, u32 enable)
 {
 	u32 vendor_func2;
@@ -2940,6 +2998,7 @@ void sdhci_msm_reset_workaround(struct sdhci_host *host, u32 enable)
 				host->ioaddr + CORE_VENDOR_SPEC_FUNC2);
 	}
 }
+#endif
 
 static struct sdhci_ops sdhci_msm_ops = {
 	.set_uhs_signaling = sdhci_msm_set_uhs_signaling,
@@ -2954,7 +3013,9 @@ static struct sdhci_ops sdhci_msm_ops = {
 	.dump_vendor_regs = sdhci_msm_dump_vendor_regs,
 	.config_auto_tuning_cmd = sdhci_msm_config_auto_tuning_cmd,
 	.enable_controller_clock = sdhci_msm_enable_controller_clock,
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	.reset_workaround = sdhci_msm_reset_workaround,
+#endif
 };
 
 static int sdhci_msm_cfg_mpm_pin_wakeup(struct sdhci_host *host, unsigned mode)
@@ -2995,13 +3056,16 @@ static void sdhci_set_default_hw_caps(struct sdhci_msm_host *msm_host,
 	u32 version, caps;
 	u16 minor;
 	u8 major;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	u32 val;
+#endif
 
 	version = readl_relaxed(msm_host->core_mem + CORE_MCI_VERSION);
 	major = (version & CORE_VERSION_MAJOR_MASK) >>
 			CORE_VERSION_MAJOR_SHIFT;
 	minor = version & CORE_VERSION_TARGET_MASK;
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	/*
 	 * Enable one MID mode for SDCC5 (major 1) on 8916/8939 (minor 0x2e) and
 	 * on 8992 (minor 0x3e) as a workaround to reset for data stuck issue.
@@ -3012,6 +3076,7 @@ static void sdhci_set_default_hw_caps(struct sdhci_msm_host *msm_host,
 		writel_relaxed((val | CORE_ONE_MID_EN),
 				host->ioaddr + CORE_VENDOR_SPEC_FUNC2);
 	}
+#endif
 
 	/*
 	 * Starting with SDCC 5 controller (core major version = 1)
@@ -3054,7 +3119,6 @@ static void sdhci_set_default_hw_caps(struct sdhci_msm_host *msm_host,
 	writel_relaxed(caps, host->ioaddr + CORE_VENDOR_SPEC_CAPABILITIES0);
 }
 
-
 /* SYSFS about SD Card Detection */
 extern struct class *sec_class;
 static struct device *t_flash_detect_dev;
@@ -3063,7 +3127,7 @@ static ssize_t t_flash_detect_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct sdhci_msm_host *msm_host = dev_get_drvdata(dev);
-#if defined(CONFIG_NO_DETECT_PIN)
+#if (defined(CONFIG_NO_DETECT_PIN) || defined(CONFIG_SEC_HYBRID_TRAY))
 	if (msm_host->mmc->card) {
 		printk(KERN_DEBUG "sdcc2: card inserted.\n");
 		return sprintf(buf, "Insert\n");
@@ -3356,19 +3420,21 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 	msm_host->mmc->caps |= msm_host->pdata->mmc_bus_width;
 	msm_host->mmc->caps |= msm_host->pdata->caps;
 	msm_host->mmc->caps2 |= msm_host->pdata->caps2;
-//	msm_host->mmc->caps2 |= MMC_CAP2_CORE_RUNTIME_PM;
-//	msm_host->mmc->caps2 |= MMC_CAP2_PACKED_WR;
-//	msm_host->mmc->caps2 |= MMC_CAP2_PACKED_WR_CONTROL;
+	//msm_host->mmc->caps2 |= MMC_CAP2_CORE_RUNTIME_PM;
+	//msm_host->mmc->caps2 |= MMC_CAP2_PACKED_WR;
+	//msm_host->mmc->caps2 |= MMC_CAP2_PACKED_WR_CONTROL;
 	msm_host->mmc->caps2 |= (MMC_CAP2_BOOTPART_NOACC |
 				MMC_CAP2_DETECT_ON_ERR);
 	msm_host->mmc->caps2 |= MMC_CAP2_CACHE_CTRL;
 	msm_host->mmc->caps2 |= MMC_CAP2_POWEROFF_NOTIFY;
-//	msm_host->mmc->caps2 |= MMC_CAP2_CLK_SCALE;
+	//msm_host->mmc->caps2 |= MMC_CAP2_CLK_SCALE;
 	msm_host->mmc->caps2 |= MMC_CAP2_STOP_REQUEST;
 	msm_host->mmc->caps2 |= MMC_CAP2_ASYNC_SDIO_IRQ_4BIT_MODE;
 	msm_host->mmc->pm_caps |= MMC_PM_KEEP_POWER | MMC_PM_WAKE_SDIO_IRQ;
 	msm_host->mmc->caps2 |= MMC_CAP2_CORE_PM;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	msm_host->mmc->caps2 |= MMC_CAP2_NO_SLEEP_CMD;
+#endif
 
 	if (msm_host->pdata->nonremovable)
 		msm_host->mmc->caps |= MMC_CAP_NONREMOVABLE;
@@ -3388,7 +3454,9 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 		 * weird/inconsistent state resulting in flood of interrupts.
 		 */
 		sdhci_msm_setup_pins(msm_host->pdata, true);
-
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+		mdelay(10);
+#endif
 		ret = mmc_gpio_request_cd(msm_host->mmc,
 				msm_host->pdata->status_gpio);
 		if (ret) {
@@ -3397,9 +3465,8 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 			goto vreg_deinit;
 		}
 	}
-
 	/* SYSFS about SD Card Detection by soonil.lim */
-#if defined(CONFIG_NO_DETECT_PIN)
+#if (defined(CONFIG_NO_DETECT_PIN) || defined(CONFIG_MACH_KLEOS_EUR))
 	if (t_flash_detect_dev == NULL && !strcmp(host->hw_name, "7864900.sdhci")) {
 #else
 	if (t_flash_detect_dev == NULL && gpio_is_valid(msm_host->pdata->status_gpio)) {

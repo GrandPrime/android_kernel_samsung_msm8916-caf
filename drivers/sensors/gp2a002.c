@@ -53,7 +53,11 @@
 #define PROX_DETECT_MODE1		0x28
 #define PROX_NONDETECT_MODE2	0x48
 #define PROX_DETECT_MODE2		0x42
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 #define OFFSET_FILE_PATH		"/efs/FactoryApp/prox_cal"
+#else
+#define OFFSET_FILE_PATH		"/efs/prox_cal"
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 
 #define PROXIMITY	1
 #define CHIP_DEV_NAME	"GP2AP002"
@@ -83,8 +87,9 @@ struct gp2a_data {
 
 	u8 detect;
 	u8 nondetect;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	struct regulator *leda_3p0;
-
+#endif
 };
 
 int gp2a_i2c_read(struct gp2a_data *gp2a, u8 reg, u8 *val)
@@ -154,7 +159,6 @@ int gp2a_i2c_write(struct gp2a_data *gp2a, u8 reg, u8 val)
 
 	return err;
 }
-#ifndef CONFIG_SENSORS_GP2A002_PMIC_LEDA
 static int gp2a_leda_onoff(struct gp2a_data *gp2a, int power)
 {
 	int ret;
@@ -168,16 +172,13 @@ static int gp2a_leda_onoff(struct gp2a_data *gp2a, int power)
 
 	return 0;
 }
-#endif
 static int gp2a_power_onoff(struct gp2a_data *gp2a, int power)
 {
 	u8 value;
 	pr_info("%s,status(%d)\n", __func__, power);
 
 	if (power) {
-#ifndef CONFIG_SENSORS_GP2A002_PMIC_LEDA
 		gp2a_leda_onoff(gp2a, power);
-#endif
 		value = 0x18;
 		gp2a_i2c_write(gp2a, REGS_CON, value);
 		value = 0x08;
@@ -200,9 +201,7 @@ static int gp2a_power_onoff(struct gp2a_data *gp2a, int power)
 
 		value = 0x02;
 		gp2a_i2c_write(gp2a, REGS_OPMOD, value);
-#ifndef CONFIG_SENSORS_GP2A002_PMIC_LEDA
 		gp2a_leda_onoff(gp2a, power);
-#endif
 	}
 	return 0;
 }
@@ -364,41 +363,6 @@ static struct device_attribute *proxi_attrs[] = {
 	&dev_attr_prox_cal,
 	NULL,
 };
-
-#ifdef CONFIG_SENSORS_GP2A002_PMIC_LEDA
-static void gp2a_pmic_leda_onoff(struct gp2a_data *info, int onoff)
-{
-	int ret;
-
-	pr_err("%s %s\n", __func__, (onoff) ? "on" : "off");
-
-	if (info->leda_3p0 == NULL) {
-		info->leda_3p0 = regulator_get(&info->i2c_client->dev,
-			"PROX_LEDA_3.0V");
-		if (IS_ERR(info->leda_3p0)) {
-			pr_err("%s: regulator_get failed for PROX_LEDA_3.0V\n",
-				__func__);
-				return;
-		}
-	}
-
-	if (onoff) {
-		ret = regulator_enable(info->leda_3p0);
-		if (ret)
-			pr_err("%s: leda_3p3 enable failed (%d)\n",
-				__func__, ret);
-	} else {
-		ret = regulator_disable(info->leda_3p0);
-		if (ret)
-			pr_err("%s: leda_3p0 disable failed (%d)\n",
-				__func__, ret);
-	}
-	msleep(20);
-	return;
-}
-
-#endif
-
 static int gp2a_regulator_onoff(struct device *dev, bool onoff)
 {
 	struct regulator *gp2a_vio;
@@ -627,8 +591,6 @@ err_gpio_direction_input:
 done:
 	return rc;
 }
-
-#ifndef CONFIG_SENSORS_GP2A002_PMIC_LEDA
 static int gp2a_request_gpio(struct gp2a_platform_data *pdata)
 {
 	int ret;
@@ -646,7 +608,8 @@ static int gp2a_request_gpio(struct gp2a_platform_data *pdata)
 	}
 	return 0;
 }
-#endif
+
+
 static int gp2a_parse_dt(struct device *dev, struct gp2a_platform_data *pdata)
 {
 	struct device_node *np = dev->of_node;
@@ -658,7 +621,6 @@ static int gp2a_parse_dt(struct device *dev, struct gp2a_platform_data *pdata)
 		pr_err("%s : get irq_gpio(%d) error\n", __func__, pdata->p_out);
 		return -ENODEV;
 	}
-#ifndef CONFIG_SENSORS_GP2A002_PMIC_LEDA
 	pdata->power_en = of_get_named_gpio_flags(np, "gp2a-i2c,en-gpio",
 				0, &flags);
 	if (pdata->power_en < 0) {
@@ -666,7 +628,6 @@ static int gp2a_parse_dt(struct device *dev, struct gp2a_platform_data *pdata)
 			pdata->power_en);
 		return -ENODEV;
 	}
-#endif
 	return 0;
 }
 
@@ -697,11 +658,9 @@ static int gp2a_i2c_probe(struct i2c_client *client,
 		ret = gp2a_parse_dt(&client->dev, pdata);
 		if (ret < 0)
 			return ret;
-#ifndef CONFIG_SENSORS_GP2A002_PMIC_LEDA
 		ret = gp2a_request_gpio(pdata);
 		if (ret < 0)
 			return ret;
-#endif
 	}
 
 	if (!pdata) {
@@ -762,11 +721,7 @@ static int gp2a_i2c_probe(struct i2c_client *client,
 
 	INIT_WORK(&gp2a->work_prox, gp2a_prox_work_func);
 
-#ifndef CONFIG_SENSORS_GP2A002_PMIC_LEDA
 	gp2a_leda_onoff(gp2a, 1);
-#else
-	gp2a_pmic_leda_onoff(gp2a, 1);
-#endif
 
 	ret = gp2a_setup_irq(gp2a);
 
@@ -775,9 +730,7 @@ static int gp2a_i2c_probe(struct i2c_client *client,
 		goto err_setup_irq;
 	}
 
-#ifndef CONFIG_SENSORS_GP2A002_PMIC_LEDA
 	gp2a_leda_onoff(gp2a, 0);
-#endif
 
 	ret = sensors_register(gp2a->dev, gp2a,
 		proxi_attrs, "proximity_sensor");
@@ -794,9 +747,7 @@ exit_gp2a_sensors_register:
 	free_irq(gp2a->irq, gp2a);
 	gpio_free(gp2a->pdata->p_out);
 err_setup_irq:
-#ifndef CONFIG_SENSORS_GP2A002_PMIC_LEDA
 	gp2a_leda_onoff(gp2a, 0);
-#endif
 	sysfs_remove_group(&gp2a->input->dev.kobj, &proximity_attribute_group);
 err_sysfs_create_group_proximity:
 	sensors_remove_symlink(&gp2a->input->dev.kobj, gp2a->input->name);
@@ -813,6 +764,7 @@ done:
 	return ret;
 }
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 static void gp2a_i2c_shutdown(struct i2c_client *client)
 {
 	struct gp2a_data *gp2a = i2c_get_clientdata(client);
@@ -826,9 +778,7 @@ static void gp2a_i2c_shutdown(struct i2c_client *client)
 
 	free_irq(gp2a->irq, gp2a);
 	gpio_free(gp2a->pdata->p_out);
-#ifndef CONFIG_SENSORS_GP2A002_PMIC_LEDA
 	gp2a_leda_onoff(gp2a, 0);
-#endif
 	sysfs_remove_group(&gp2a->input->dev.kobj, &proximity_attribute_group);
 	sensors_remove_symlink(&gp2a->input->dev.kobj, gp2a->input->name);
 	input_unregister_device(gp2a->input);
@@ -836,6 +786,7 @@ static void gp2a_i2c_shutdown(struct i2c_client *client)
 	wake_lock_destroy(&gp2a->prx_wake_lock);
 	kfree(gp2a);
 }
+#endif
 
 static const struct i2c_device_id gp2a_device_id[] = {
 	{"gp2a", 0},
@@ -858,7 +809,9 @@ static struct i2c_driver gp2a_i2c_driver = {
 
 	},
 	.probe		= gp2a_i2c_probe,
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	.shutdown	= gp2a_i2c_shutdown,
+#endif
 	.id_table	= gp2a_device_id,
 };
 

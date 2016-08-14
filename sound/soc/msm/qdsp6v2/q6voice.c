@@ -57,7 +57,12 @@ int voc_get_loopback_enable(void)
 void voc_set_loopback_enable(int mode)
 {
 	loopback_prev_mode = loopback_mode;
+	if(mode >= LOOPBACK_MAX)	{
+		loopback_mode = LOOPBACK_DISABLE;
+	}
+	else	{
 	loopback_mode = mode;
+	}
 	
 	pr_info("%s : prev_mode = %d, mode = %d\n",
 		__func__, loopback_prev_mode, mode);	
@@ -100,7 +105,7 @@ static int32_t qdsp_cvp_callback(struct apr_client_data *data, void *priv);
 static int voice_send_set_pp_enable_cmd(struct voice_data *v,
 					uint32_t module_id, int enable);
 #ifdef CONFIG_SAMSUNG_AUDIO
-static int send_packet_loopback_cmd(struct voice_data *v, bool mode);
+static int send_packet_loopback_cmd(struct voice_data *v, int mode);
 #endif /* CONFIG_SAMSUNG_AUDIO */
 static int is_cal_memory_allocated(void);
 static int is_voip_memory_allocated(void);
@@ -2878,13 +2883,12 @@ fail:
 }
 
 #ifdef CONFIG_SAMSUNG_AUDIO
-static int send_packet_loopback_cmd(struct voice_data *v, bool mode)
+static int send_packet_loopback_cmd(struct voice_data *v, int mode)
 {
 	struct cvs_set_loopback_enable_cmd cvs_set_loopback_cmd;
 	int ret = 0;
 	void *apr_cvs;
 	u16 cvs_handle;
-
 
 	if (v == NULL) {
 		pr_err("%s: v is NULL\n", __func__);
@@ -2917,7 +2921,7 @@ static int send_packet_loopback_cmd(struct voice_data *v, bool mode)
 	cvs_set_loopback_cmd.vss_set_loopback.param_id = VOICE_PARAM_LOOPBACK_ENABLE;
 	cvs_set_loopback_cmd.vss_set_loopback.param_size = MOD_ENABLE_PARAM_LEN;
 	cvs_set_loopback_cmd.vss_set_loopback.reserved = 0;
-	cvs_set_loopback_cmd.vss_set_loopback.loopback_enable = (mode)? 1: 0;
+	cvs_set_loopback_cmd.vss_set_loopback.loopback_enable = mode;
 	cvs_set_loopback_cmd.vss_set_loopback.reserved_field = 0;
 
 	v->cvs_state = CMD_STATUS_FAIL;
@@ -5271,8 +5275,8 @@ int voc_end_voice_call(uint32_t session_id)
 	    v->voc_state == VOC_CHANGE || v->voc_state == VOC_STANDBY) {
 
 #ifdef CONFIG_SAMSUNG_AUDIO
-		if ((loopback_mode == 0) && (loopback_prev_mode == 1)) {
-			ret = send_packet_loopback_cmd(v, false);
+		if ((loopback_mode == LOOPBACK_DISABLE) && (loopback_prev_mode == LOOPBACK_ENABLE || loopback_prev_mode == LOOPBACK_NODELAY)) {
+			ret = send_packet_loopback_cmd(v, loopback_mode);
 			if (ret < 0) {
 				pr_err("send packet loopback disable cmd failed\n");
 			} else {
@@ -5615,8 +5619,8 @@ int voc_start_voice_call(uint32_t session_id)
 		}
 
 #ifdef CONFIG_SAMSUNG_AUDIO
-		if (loopback_mode == 1) {
-			ret = send_packet_loopback_cmd(v, true);
+		if (loopback_mode == LOOPBACK_ENABLE || loopback_mode == LOOPBACK_NODELAY) {
+			ret = send_packet_loopback_cmd(v, loopback_mode);
 			if (ret < 0) {
 				pr_err("send packet loopback cmd failed\n");
 				goto fail;
@@ -6109,8 +6113,8 @@ static int32_t qdsp_cvs_callback(struct apr_client_data *data, void *priv)
 				rtac_make_voice_callback(RTAC_CVS, ptr,
 							data->payload_size);
 #ifdef CONFIG_SAMSUNG_AUDIO
-				if ((loopback_mode == 1) ||
-				((loopback_mode == 0) && (loopback_prev_mode == 1))) {
+				if ((loopback_mode == LOOPBACK_ENABLE || loopback_mode == LOOPBACK_NODELAY) ||
+				((loopback_mode == LOOPBACK_DISABLE) && (loopback_prev_mode == LOOPBACK_ENABLE || loopback_prev_mode == LOOPBACK_NODELAY))) {
 					v->cvs_state = CMD_STATUS_SUCCESS;
 					wake_up(&v->cvs_wait);
 				}

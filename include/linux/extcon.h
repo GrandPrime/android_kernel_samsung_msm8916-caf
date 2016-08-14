@@ -27,7 +27,9 @@
 #include <linux/notifier.h>
 #include <linux/sysfs.h>
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 #define EXTCON_DEV_NAME			"extcon-muic"
+#endif
 
 #if defined(CONFIG_SEC_FORTUNA_PROJECT)
 #define SUPPORTED_CABLE_MAX	32

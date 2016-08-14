@@ -248,8 +248,10 @@ void adreno_ringbuffer_read_pm4_ucode(struct kgsl_device *device)
 
 		if (ret)
 		{
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 			if((ret == -EAGAIN) && (system_state == SYSTEM_POWER_OFF))
 				return;
+#endif
 			goto err;
 		}
 
@@ -308,8 +310,10 @@ void adreno_ringbuffer_read_pfp_ucode(struct kgsl_device *device)
 			adreno_dev->gpucore->pfpfw_name, &ptr, &len);
 		if (ret)
 		{
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 			if((ret == -EAGAIN) && (system_state == SYSTEM_POWER_OFF))
 				return;
+#endif
 			goto err;
 		}
 

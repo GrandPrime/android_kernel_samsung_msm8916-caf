@@ -783,6 +783,7 @@ static const struct file_operations logger_fops = {
 #ifdef CONFIG_SEC_DEBUG
 /* Use the old way because the new logger gets log buffers by means of vmalloc().
     getlog tool considers that log buffers lie on physically contiguous memory area. */
+
 /*
  * Defines a log structure with name 'NAME' and a size of 'SIZE' bytes, which
  * must be a power of two, and greater than

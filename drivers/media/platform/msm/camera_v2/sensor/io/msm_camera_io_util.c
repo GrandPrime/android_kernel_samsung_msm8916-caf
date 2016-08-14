@@ -23,7 +23,6 @@
 
 #define BUFF_SIZE_128 128
 
-//#define CONFIG_MSMB_CAMERA_DEBUG 1
 #undef CDBG
 #ifdef CONFIG_MSMB_CAMERA_DEBUG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
@@ -37,10 +36,6 @@
 #else
 #define RT5033_RESET_WA_VREG_NAME    ("cam_vana")
 #endif
-#endif
-
-#if defined(CONFIG_SEC_NOVEL_PROJECT) && defined(CONFIG_CAM_USE_GPIO_I2C)
-extern unsigned int system_rev;
 #endif
 
 void msm_camera_io_w(u32 data, void __iomem *addr)
@@ -509,29 +504,13 @@ int msm_camera_config_single_vreg(struct device *dev,
 		}
 		CDBG("%s enable %s\n", __func__, cam_vreg->reg_name);
 		if (!strncmp(cam_vreg->reg_name, "cam_vdig", 8)) {
-#if defined(CONFIG_SEC_ROSSA_PROJECT)
-			*reg_ptr = regulator_get(dev, "CAM_SENSOR_IO_1.8V");
-#elif defined(CONFIG_SEC_NOVEL_PROJECT)
-			*reg_ptr = regulator_get(dev, "CAM_SENSOR_CORE_1.8V");
-#else
 			*reg_ptr = regulator_get(dev, "CAM_SENSOR_CORE_1.2V");
-#endif
 			if (IS_ERR(*reg_ptr)) {
 				pr_err("%s: %s get failed\n", __func__,
 						cam_vreg->reg_name);
 				*reg_ptr = NULL;
 				goto vreg_get_fail;
 			}
-#if defined(CONFIG_SEC_NOVEL_PROJECT)
-		} else if (!strncmp(cam_vreg->reg_name, "cam_vana_vt", 11)) {
-			*reg_ptr = regulator_get(dev, "LDO3");
-			if (IS_ERR(*reg_ptr)) {
-				pr_err("%s: %s get failed\n", __func__,
-						cam_vreg->reg_name);
-				*reg_ptr = NULL;
-				goto vreg_get_fail;
-			}
-#endif
 		} else if (!strncmp(cam_vreg->reg_name, "cam_vana", 8)) {
 			*reg_ptr = regulator_get(dev, "CAM_SENSOR_A2.8V");
 			if (IS_ERR(*reg_ptr)) {
@@ -540,19 +519,6 @@ int msm_camera_config_single_vreg(struct device *dev,
 				*reg_ptr = NULL;
 				goto vreg_get_fail;
 			}
-#if defined(CONFIG_SEC_NOVEL_PROJECT) && defined(CONFIG_CAM_USE_GPIO_I2C)
-		} else if (!strncmp(cam_vreg->reg_name, "cam_vio_vt", 10)) {
-			pr_err("[cam_vio_vt]%s:%d system_rev:%d\n", __func__, __LINE__, system_rev);
-			if(system_rev == 0) {
-				*reg_ptr = regulator_get(dev, "LDO2");
-				if (IS_ERR(*reg_ptr)) {
-					pr_err("%s: %s get failed\n", __func__,
-							cam_vreg->reg_name);
-					*reg_ptr = NULL;
-					goto vreg_get_fail;
-				}
-      }
-#endif
 		} else {
 			*reg_ptr = regulator_get(dev, cam_vreg->reg_name);
 			if (IS_ERR_OR_NULL(*reg_ptr)) {

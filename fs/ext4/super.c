@@ -388,7 +388,11 @@ static void ext4_journal_commit_callback(journal_t *journal, transaction_t *txn)
  * that error until we've noted it down and cleared it.
  */
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+static void ext4_handle_error(struct super_block *sb)
+#else
 static void ext4_handle_error(struct super_block *sb, char* buf)
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 {
 	if (sb->s_flags & MS_RDONLY)
 		return;
@@ -405,8 +409,13 @@ static void ext4_handle_error(struct super_block *sb, char* buf)
 		sb->s_flags |= MS_RDONLY;
 	}
 	if (test_opt(sb, ERRORS_PANIC))
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+		panic("EXT4-fs (device %s): panic forced after error\n",
+			sb->s_id);
+#else
 		panic("EXT4-fs (device %s): panic! %s\n",
 			sb->s_id, buf?buf:"no message");
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 }
 
 void __ext4_error(struct super_block *sb, const char *function,
@@ -414,25 +423,33 @@ void __ext4_error(struct super_block *sb, const char *function,
 {
 	struct va_format vaf;
 	va_list args;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	char *page_buf;
+#endif
 
 	va_start(args, fmt);
 	vaf.fmt = fmt;
 	vaf.va = &args;
 	printk(KERN_CRIT "EXT4-fs error (device %s): %s:%d: comm %s: %pV\n",
 	       sb->s_id, function, line, current->comm, &vaf);
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	page_buf = (char *)__get_free_page(GFP_ATOMIC);
 	if (page_buf)
 		sprintf(page_buf, "%s %s:%u: %pV",
 					"***Keep this device after RDX, do not reboot***", function, line, &vaf);
 	else
 		printk(KERN_ERR "__ext4_error: failed to allocate page buf for panic msg\n");
+#endif
 	va_end(args);
 	save_error_info(sb, function, line);
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	ext4_handle_error(sb);
+#else
 	ext4_handle_error(sb, page_buf);
 	if (page_buf)
 		free_page((unsigned long)page_buf);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 }
 
 void ext4_error_inode(struct inode *inode, const char *function,
@@ -442,7 +459,10 @@ void ext4_error_inode(struct inode *inode, const char *function,
 	va_list args;
 	struct va_format vaf;
 	struct ext4_super_block *es = EXT4_SB(inode->i_sb)->s_es;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	char *page_buf;
+#endif
+
 
 	es->s_last_error_ino = cpu_to_le32(inode->i_ino);
 	es->s_last_error_block = cpu_to_le64(block);
@@ -462,17 +482,23 @@ void ext4_error_inode(struct inode *inode, const char *function,
 		       "inode #%lu: comm %s: %pV\n",
 		       inode->i_sb->s_id, function, line, inode->i_ino,
 		       current->comm, &vaf);
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	page_buf = (char *)__get_free_page(GFP_ATOMIC);
 	if (page_buf)
 		sprintf(page_buf, "%s %s:%u: %pV",
 					"***Keep this device after RDX, do not reboot***", function, line, &vaf);
 	else
 		printk(KERN_ERR "__ext4_error: failed to allocate page buf for panic msg\n");
+#endif
 	va_end(args);
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	ext4_handle_error(inode->i_sb);
+#else
 	ext4_handle_error(inode->i_sb, page_buf);
 	if (page_buf)
 		free_page((unsigned long)page_buf);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 }
 
 void ext4_error_file(struct file *file, const char *function,
@@ -484,7 +510,9 @@ void ext4_error_file(struct file *file, const char *function,
 	struct ext4_super_block *es;
 	struct inode *inode = file_inode(file);
 	char pathname[80], *path;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	char *page_buf;
+#endif
 
 	es = EXT4_SB(inode->i_sb)->s_es;
 	es->s_last_error_ino = cpu_to_le32(inode->i_ino);
@@ -507,17 +535,24 @@ void ext4_error_file(struct file *file, const char *function,
 		       "comm %s: path %s: %pV\n",
 		       inode->i_sb->s_id, function, line, inode->i_ino,
 		       current->comm, path, &vaf);
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	page_buf = (char *)__get_free_page(GFP_ATOMIC);
 	if (page_buf)
 		sprintf(page_buf, "%s %s:%u: %pV",
 					"***Keep this device after RDX, do not reboot***", function, line, &vaf);
 	else
 		printk(KERN_ERR "__ext4_error: failed to allocate page buf for panic msg\n");
+#endif
 	va_end(args);
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	ext4_handle_error(inode->i_sb);
+#else
 	ext4_handle_error(inode->i_sb, page_buf);
 	if (page_buf)
 		free_page((unsigned long)page_buf);
+
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 }
 
 const char *ext4_decode_error(struct super_block *sb, int errno,
@@ -562,7 +597,9 @@ void __ext4_std_error(struct super_block *sb, const char *function,
 {
 	char nbuf[16];
 	const char *errstr;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	char *page_buf;
+#endif
 
 	/* Special case: if the error is EROFS, and we're not already
 	 * inside a transaction, then there's really no point in logging
@@ -576,6 +613,9 @@ void __ext4_std_error(struct super_block *sb, const char *function,
 	       sb->s_id, function, line, errstr);
 	save_error_info(sb, function, line);
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	ext4_handle_error(sb);
+#else
 	page_buf = (char *)__get_free_page(GFP_ATOMIC);
 	if (page_buf)
 		sprintf(page_buf, "%s:%u: <%s>",
@@ -586,6 +626,7 @@ void __ext4_std_error(struct super_block *sb, const char *function,
 	ext4_handle_error(sb, page_buf);
 	if (page_buf)
 		free_page((unsigned long)page_buf);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 }
 
 /*
@@ -659,7 +700,9 @@ __acquires(bitlock)
 	struct va_format vaf;
 	va_list args;
 	struct ext4_super_block *es = EXT4_SB(sb)->s_es;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	char *page_buf;
+#endif
 
 	es->s_last_error_ino = cpu_to_le32(ino);
 	es->s_last_error_block = cpu_to_le64(block);
@@ -676,12 +719,14 @@ __acquires(bitlock)
 	if (block)
 		printk(KERN_CONT "block %llu:", (unsigned long long) block);
 	printk(KERN_CONT "%pV\n", &vaf);
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	page_buf = (char *)__get_free_page(GFP_ATOMIC);
 	if (page_buf)
 		sprintf(page_buf, "%s %s:%u: %pV",
 					"***Keep this device after RDX, do not reboot***", function, line, &vaf);
 	else
 		printk(KERN_ERR "__ext4_error: failed to allocate page buf for panic msg\n");
+#endif
 	va_end(args);
 
 	if (test_opt(sb, ERRORS_CONT)) {
@@ -690,9 +735,13 @@ __acquires(bitlock)
 	}
 
 	ext4_unlock_group(sb, grp);
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+	ext4_handle_error(sb);
+#else
 	ext4_handle_error(sb, page_buf);
 	if (page_buf)
 		free_page((unsigned long)page_buf);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	/*
 	 * We only get here in the ERRORS_RO case; relocking the group
 	 * may be dangerous, but nothing bad will happen since the
@@ -4507,8 +4556,12 @@ static int ext4_commit_super(struct super_block *sb, int sync)
 	ext4_superblock_csum_set(sb);
 	mark_buffer_dirty(sbh);
 	if (sync) {
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+		error = sync_dirty_buffer(sbh);
+#else
 		error = __sync_dirty_buffer(sbh,
 			test_opt(sb, BARRIER) ? WRITE_FUA : WRITE_SYNC);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 		if (error)
 			return error;
 

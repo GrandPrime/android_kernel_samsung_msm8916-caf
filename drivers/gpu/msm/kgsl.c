@@ -2754,6 +2754,7 @@ static int kgsl_setup_phys_file(struct kgsl_mem_entry *entry,
 }
 #endif
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 static int check_vma_flags(struct vm_area_struct *vma,
 		unsigned int flags)
 {
@@ -2767,6 +2768,7 @@ static int check_vma_flags(struct vm_area_struct *vma,
 
 	return -EFAULT;
 }
+#endif
 
 static int check_vma(struct vm_area_struct *vma, struct file *vmfile,
 		struct kgsl_memdesc *memdesc)
@@ -2781,7 +2783,11 @@ static int check_vma(struct vm_area_struct *vma, struct file *vmfile,
 	if (vma->vm_start != memdesc->useraddr ||
 		(memdesc->useraddr + memdesc->size) != vma->vm_end)
 		return -EINVAL;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	return check_vma_flags(vma, memdesc->flags);
+#else
+	return 0;
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 }
 
 static int memdesc_sg_virt(struct kgsl_memdesc *memdesc, struct file *vmfile)
@@ -2790,7 +2796,11 @@ static int memdesc_sg_virt(struct kgsl_memdesc *memdesc, struct file *vmfile)
 	long npages = 0, i;
 	unsigned long sglen = memdesc->size / PAGE_SIZE;
 	struct page **pages = NULL;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	int write = ((memdesc->flags & KGSL_MEMFLAGS_GPUREADONLY) ? 0 : 1);
+#else
+	int write = (memdesc->flags & KGSL_MEMFLAGS_GPUREADONLY) != 0;
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 
 	if (sglen == 0 || sglen >= LONG_MAX)
 		return -EINVAL;
@@ -2876,7 +2886,9 @@ static int kgsl_setup_useraddr(struct kgsl_mem_entry *entry,
 	struct kgsl_map_user_mem *param = data;
 	struct dma_buf *dmabuf = NULL;
 	struct vm_area_struct *vma = NULL;
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	int ret;
+#endif
 
 	if (param->offset != 0 || param->hostptr == 0
 		|| !KGSL_IS_PAGE_ALIGNED(param->hostptr)
@@ -2893,12 +2905,13 @@ static int kgsl_setup_useraddr(struct kgsl_mem_entry *entry,
 	if (vma && vma->vm_file) {
 		int fd;
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 		ret = check_vma_flags(vma, entry->memdesc.flags);
 		if (ret) {
 			up_read(&current->mm->mmap_sem);
 			return ret;
 		}
-
+#endif
 		/*
 		 * Check to see that this isn't our own memory that we have
 		 * already mapped

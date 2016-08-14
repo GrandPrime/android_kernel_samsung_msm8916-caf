@@ -2,7 +2,7 @@
 #define CAPACITY_MAX_MARGIN     50
 #define CAPACITY_MIN			0
 
-#if defined(CONFIG_SEC_FORTUNA_PROJECT) || defined(CONFIG_MACH_FORTUNA_TMO) || defined(CONFIG_MACH_FORTUNA_SPR) || defined(CONFIG_MACH_FORTUNA_ACG)
+#if defined(CONFIG_MACH_FORTUNA_TMO) || defined(CONFIG_MACH_FORTUNA_SPR) || defined(CONFIG_MACH_FORTUNA_ACG) || defined(CONFIG_MACH_FORTUNA_EUR_OPEN)
 static sec_bat_adc_table_data_t temp_table[] = {
 	{26056, 900},
 	{26268, 850},

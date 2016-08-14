@@ -151,6 +151,19 @@ enum sec_battery_full_charged {
 	/* charger power supply property, NO additional full condition */
 	SEC_BATTERY_FULLCHARGED_CHGPSY,
 };
+
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+/* Self discharger type */
+enum sec_battery_discharger_type {
+	/* type ADC */
+	SEC_BAT_SELF_DISCHARGING_BY_ADC = 0,
+	/* type Fuel Gauge */
+	SEC_BAT_SELF_DISCHARGING_BY_FG,
+	/* type Charger */
+	SEC_BAT_SELF_DISCHARGING_BY_CHG,
+};
+#endif
+
 #define sec_battery_full_charged_t \
 	enum sec_battery_full_charged
 
@@ -160,8 +173,8 @@ enum sec_battery_full_charged {
   * full-charged by absolute-timer only in high voltage
   */
 #define SEC_BATTERY_FULL_CONDITION_NOTIMEFULL	1
-/* SEC_BATTERY_FULL_CONDITION_NOSLEEPINFULL
-  * do not set polling time as sleep polling time in full-charged
+/* SEC_BATTERY_FULL_CONDITION_SLEEPINFULL
+  * change polling time as sleep polling time even in full-charged
   */
 #define SEC_BATTERY_FULL_CONDITION_NOSLEEPINFULL	2
 /* SEC_BATTERY_FULL_CONDITION_SOC
@@ -450,6 +463,11 @@ struct sec_battery_platform_data {
 
 	/* battery swelling */
 	int swelling_chg_current;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	int swelling_high_chg_current;
+	int swelling_low_chg_current;
+	int swelling_full_check_current_2nd;
+#endif
 	unsigned int swelling_normal_float_voltage;
 	unsigned int swelling_drop_float_voltage;
 	unsigned int swelling_high_rechg_voltage;
@@ -464,6 +482,9 @@ struct sec_battery_platform_data {
 	int force_discharging_limit;
 	int force_discharging_recov;
 	int factory_discharging;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	unsigned int self_discharging_type;
+#endif
 
 	/* Monitor setting */
 	sec_battery_monitor_polling_t polling_type;
@@ -539,6 +560,10 @@ struct sec_battery_platform_data {
 	int chg_high_temp_recovery;
 	int chg_charging_limit_current;
 	int chg_charging_limit_current_2nd;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	unsigned int chg_skip_check_time;
+	unsigned int chg_skip_check_capacity;
+#endif
 	int wpc_high_temp;
 	int wpc_high_temp_recovery;
 	int wpc_charging_limit_current;
@@ -614,7 +639,13 @@ struct sec_battery_platform_data {
 #if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	int siop_level;
 	bool siop_activated;
-#endif	bool always_enable;
+#endif
+#if defined(CONFIG_SW_SELF_DISCHARGING)
+	int self_discharging_temp_block;
+	int self_discharging_volt_block;
+	int self_discharging_temp_recov;
+	int self_discharging_temp_pollingtime;
+#endif
 
 	/* ADC setting */
 	unsigned int adc_check_count;
@@ -628,6 +659,10 @@ struct sec_charger_platform_data {
 	/* charging current for type (0: not use) */
 	sec_charging_current_t *charging_current;
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	/* wirelss charger */
+	char *wireless_charger_name;
+#endif
 	int vbus_ctrl_gpio;
 	int chg_gpio_en;
 	/* 1 : active high, 0 : active low */
@@ -636,7 +671,30 @@ struct sec_charger_platform_data {
 	int chg_float_voltage;
 
 	int chg_irq;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	int wpc_det;
+#endif
 	unsigned long chg_irq_attr;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	int wireless_cc_cv;
+
+	int siop_call_cc_current;
+	int siop_call_cv_current;
+
+	int wpc_charging_limit_current;
+	int sleep_mode_limit_current;
+
+	int siop_input_limit_current;
+	int siop_charging_limit_current;
+	int siop_hv_input_limit_current;
+	int siop_hv_charging_limit_current;
+	int siop_wireless_input_limit_current;
+	int siop_wireless_charging_limit_current;
+	int siop_hv_wireless_input_limit_current;
+	int siop_hv_wireless_charging_limit_current;
+
+	bool support_slow_charging;
+#endif
 
 	/* OVP/UVLO check */
 	sec_battery_ovp_uvlo_t ovp_uvlo_check_type;

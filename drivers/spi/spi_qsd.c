@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1839,6 +1839,7 @@ static int msm_spi_transfer_one_message(struct spi_master *master,
 	 * get local resources for each transfer to ensure we're in a good
 	 * state and not interfering with other EE's using this device
 	 */
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	if (get_local_resources(dd)) {
 		mutex_unlock(&dd->core_lock);
 		return -EINVAL;
@@ -1851,6 +1852,22 @@ static int msm_spi_transfer_one_message(struct spi_master *master,
 		msm_spi_bam_pipe_connect(dd, &dd->bam.cons,
 				&dd->bam.cons.config);
 	}
+#else
+	if (dd->pdata->is_shared) {
+		if (get_local_resources(dd)) {
+			mutex_unlock(&dd->core_lock);
+			return -EINVAL;
+		}
+
+		reset_core(dd);
+		if (dd->use_dma) {
+			msm_spi_bam_pipe_connect(dd, &dd->bam.prod,
+					&dd->bam.prod.config);
+			msm_spi_bam_pipe_connect(dd, &dd->bam.cons,
+					&dd->bam.cons.config);
+		}
+	}
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 
 	if (dd->suspended || !msm_spi_is_valid_state(dd)) {
 		dev_err(dd->dev, "%s: SPI operational state not valid\n",
@@ -1876,11 +1893,21 @@ static int msm_spi_transfer_one_message(struct spi_master *master,
 	 * different context since we're running in the spi kthread here) to
 	 * prevent race conditions between us and any other EE's using this hw.
 	 */
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	if (dd->use_dma) {
 		msm_spi_bam_pipe_disconnect(dd, &dd->bam.prod);
 		msm_spi_bam_pipe_disconnect(dd, &dd->bam.cons);
 	}
 	put_local_resources(dd);
+#else
+	if (dd->pdata->is_shared) {
+		if (dd->use_dma) {
+			msm_spi_bam_pipe_disconnect(dd, &dd->bam.prod);
+			msm_spi_bam_pipe_disconnect(dd, &dd->bam.cons);
+		}
+		put_local_resources(dd);
+	}
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 	mutex_unlock(&dd->core_lock);
 	if (dd->suspended)
 		wake_up_interruptible(&dd->continue_suspend);
@@ -1943,10 +1970,17 @@ static int msm_spi_setup(struct spi_device *spi)
 	dd = spi_master_get_devdata(spi->master);
 
 	pm_runtime_get_sync(dd->dev);
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	rc = get_local_resources(dd);
 	if (rc)
 		goto no_resources;
-
+#else
+	if (dd->pdata->is_shared) {
+		rc = get_local_resources(dd);
+		if (rc)
+			goto no_resources;
+	}
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 
 	mutex_lock(&dd->core_lock);
 
@@ -1983,7 +2017,12 @@ static int msm_spi_setup(struct spi_device *spi)
 
 err_setup_exit:
 	mutex_unlock(&dd->core_lock);
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	put_local_resources(dd);
+#else
+	if (dd->pdata->is_shared)
+		put_local_resources(dd);
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 no_resources:
 	pm_runtime_mark_last_busy(dd->dev);
 	pm_runtime_put_autosuspend(dd->dev);
@@ -2391,6 +2430,10 @@ struct msm_spi_platform_data *msm_spi_dt_to_pdata(
 			&dd->cs_gpios[3].gpio_num,       DT_OPT,  DT_GPIO, -1},
 		{"qcom,rt-priority",
 			&pdata->rt_priority,		 DT_OPT,  DT_BOOL,  0},
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+		{"qcom,shared",
+			&pdata->is_shared,		 DT_OPT,  DT_BOOL,  0},
+#endif
 		{NULL,  NULL,                            0,       0,        0},
 		};
 
@@ -2761,9 +2804,18 @@ static int msm_spi_pm_suspend_runtime(struct device *device)
 	wait_event_interruptible(dd->continue_suspend,
 		!dd->transfer_pending);
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	if (dd->pdata && !dd->pdata->is_shared && dd->use_dma) {
+		msm_spi_bam_pipe_disconnect(dd, &dd->bam.prod);
+		msm_spi_bam_pipe_disconnect(dd, &dd->bam.cons);
+	}
+#endif
 	if (dd->pdata && !dd->pdata->active_only)
 		msm_spi_clk_path_unvote(dd);
-
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	if (dd->pdata && !dd->pdata->is_shared)
+		put_local_resources(dd);
+#endif
 suspend_exit:
 	return 0;
 }
@@ -2783,10 +2835,21 @@ static int msm_spi_pm_resume_runtime(struct device *device)
 
 	if (!dd->suspended)
 		return 0;
-
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	if (!dd->pdata->is_shared)
+		get_local_resources(dd);
+#endif
 	msm_spi_clk_path_init(dd);
 	if (!dd->pdata->active_only)
 		msm_spi_clk_path_vote(dd);
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	if (!dd->pdata->is_shared && dd->use_dma) {
+		msm_spi_bam_pipe_connect(dd, &dd->bam.prod,
+				&dd->bam.prod.config);
+		msm_spi_bam_pipe_connect(dd, &dd->bam.cons,
+				&dd->bam.cons.config);
+	}
+#endif
 	dd->suspended = 0;
 
 resume_exit:

@@ -52,7 +52,9 @@ struct sec_battery_extcon_cable{
 #define ADC_CH_COUNT		10
 #define ADC_SAMPLE_COUNT	10
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 #define DEFAULT_HEALTH_CHECK_COUNT	5
+#endif
 #define TEMP_HIGHLIMIT_DEFAULT	2000
 
 #if defined(CONFIG_CHARGING_VZWCONCEPT)

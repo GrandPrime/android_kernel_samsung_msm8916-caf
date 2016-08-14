@@ -11,8 +11,10 @@
 #include <linux/rmap.h>
 #include <linux/swap.h>
 #include <linux/swapops.h>
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 #include <linux/mm_inline.h>
 #include <linux/ctype.h>
+#endif
 
 #include <asm/elf.h>
 #include <asm/uaccess.h>
@@ -491,7 +493,9 @@ struct mem_size_stats {
 	unsigned long swap;
 	unsigned long nonlinear;
 	u64 pss;
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 	u64 swap_pss;
+#endif
 };
 
 
@@ -508,7 +512,11 @@ static void smaps_pte_entry(pte_t ptent, unsigned long addr,
 		page = vm_normal_page(vma, addr, ptent);
 	} else if (is_swap_pte(ptent)) {
 		swp_entry_t swpent = pte_to_swp_entry(ptent);
-
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
+		if (!non_swap_entry(swpent))
+			mss->swap += ptent_size;
+		else if (is_migration_entry(swpent))
+#else
 		if (!non_swap_entry(swpent)) {
 			int mapcount;
 
@@ -523,6 +531,7 @@ static void smaps_pte_entry(pte_t ptent, unsigned long addr,
 				mss->swap_pss += (u64)ptent_size << PSS_SHIFT;
 			}
 		} else if (is_migration_entry(swpent))
+#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 			page = migration_entry_to_page(swpent);
 	} else if (pte_file(ptent)) {
 		if (pte_to_pgoff(ptent) != pgoff)
@@ -671,6 +680,9 @@ static int show_smap(struct seq_file *m, void *v, int is_pid)
 		   "Anonymous:      %8lu kB\n"
 		   "AnonHugePages:  %8lu kB\n"
 		   "Swap:           %8lu kB\n"
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+		   "SwapPss:        %8lu kB\n"
+#endif
 		   "KernelPageSize: %8lu kB\n"
 		   "MMUPageSize:    %8lu kB\n"
 		   "Locked:         %8lu kB\n",
@@ -685,6 +697,9 @@ static int show_smap(struct seq_file *m, void *v, int is_pid)
 		   mss.anonymous >> 10,
 		   mss.anonymous_thp >> 10,
 		   mss.swap >> 10,
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+		   (unsigned long)(mss.swap_pss >> (10 + PSS_SHIFT)),
+#endif
 		   vma_kernel_pagesize(vma) >> 10,
 		   vma_mmu_pagesize(vma) >> 10,
 		   (vma->vm_flags & VM_LOCKED) ?
@@ -749,6 +764,7 @@ const struct file_operations proc_pid_smaps_operations = {
 	.release	= seq_release_private,
 };
 
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 static int proc_pid_smaps_simple_show(struct seq_file *m, void *v)
 {
 	struct pid *pid = (struct pid *)m->private;
@@ -818,6 +834,7 @@ const struct file_operations proc_pid_smaps_simple_operations = {
 	.llseek		= seq_lseek,
 	.release	= single_release,
 };
+#endif
 
 const struct file_operations proc_tid_smaps_operations = {
 	.open		= tid_smaps_open,

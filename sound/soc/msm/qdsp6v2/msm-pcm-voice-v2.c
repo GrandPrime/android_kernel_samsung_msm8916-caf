@@ -648,11 +648,7 @@ static struct snd_kcontrol_new msm_voice_controls[] = {
 #ifdef CONFIG_SAMSUNG_AUDIO				
 	SOC_SINGLE_MULTI_EXT("Sec Set DHA data", SND_SOC_NOPM, 0, 65535, 0, 14,
 				msm_sec_dha_get, msm_sec_dha_put),
-#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	SOC_SINGLE_EXT("Loopback Enable", SND_SOC_NOPM, 0, LOOPBACK_MAX, 0,
-#else
-	SOC_SINGLE_EXT("Loopback Enable", SND_SOC_NOPM, 0, 1, 0,
-#endif
 				msm_loopback_get, msm_loopback_put),
 #endif /* CONFIG_SAMSUNG_AUDIO */
 	SOC_SINGLE_MULTI_EXT("HD Voice Enable", SND_SOC_NOPM, 0, VSID_MAX, 0, 2,

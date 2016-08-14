@@ -1432,10 +1432,11 @@ static int sec_fg_check_capacity_max(
 	return new_capacity_max;
 }
 
-static int sec_fg_calculate_dynamic_scale(
 #if defined(CONFIG_SEC_FORTUNA_PROJECT)
+static int sec_fg_calculate_dynamic_scale(
 				struct sec_fuelgauge_info *fuelgauge)
 #else
+static int sec_fg_calculate_dynamic_scale(
 				struct sec_fuelgauge_info *fuelgauge, int capacity)
 #endif /* CONFIG_SEC_FORTUNA_PROJECT */
 {
@@ -1479,7 +1480,7 @@ static int sec_fg_calculate_dynamic_scale(
 	}
 #endif
 	/* update capacity_old for sec_fg_get_atomic_capacity algorithm */
-if defined(CONFIG_SEC_FORTUNA_PROJECT)
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	fuelgauge->capacity_old = 100;
 #else
 	fuelgauge->capacity_old = capacity;

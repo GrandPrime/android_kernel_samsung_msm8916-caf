@@ -550,13 +550,23 @@ err_add_regulator_devs:
 #endif /*CONFIG_REGULATOR_RT5033*/
 err_init_irq:
 	wake_lock_destroy(&(chip->irq_wake_lock));
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	mutex_destroy(&chip->suspend_flag_lock);
+#endif
 	mutex_destroy(&chip->regulator_lock);
 	mutex_destroy(&chip->io_lock);
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	kfree(chip);
+#endif
 irq_base_err:
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+err_mfd_nomem:
+#endif
 err_i2cfunc_not_support:
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	kfree(chip);
 err_mfd_nomem:
+#endif
 err_parse_dt:
 err_dt_nomem:
 	return ret;

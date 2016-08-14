@@ -63,7 +63,6 @@ config QPNP_RESIN
 	  It supports reporting the change in status of the RESIN line
 	  (connected to the volume down key).
 
-
 config QPNP_CLKDIV
 	tristate "QPNP PMIC clkdiv driver"
 	depends on OF_SPMI && SPMI

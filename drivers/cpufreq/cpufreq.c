@@ -80,9 +80,6 @@ static void handle_update(struct work_struct *work);
  */
 static BLOCKING_NOTIFIER_HEAD(cpufreq_policy_notifier_list);
 static struct srcu_notifier_head cpufreq_transition_notifier_list;
-#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
-struct atomic_notifier_head cpufreq_govinfo_notifier_list;
-#endif
 
 static bool init_cpufreq_transition_notifier_list_called;
 static int __init init_cpufreq_transition_notifier_list(void)
@@ -92,17 +89,6 @@ static int __init init_cpufreq_transition_notifier_list(void)
 	return 0;
 }
 pure_initcall(init_cpufreq_transition_notifier_list);
-
-#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
-static bool init_cpufreq_govinfo_notifier_list_called;
-static int __init init_cpufreq_govinfo_notifier_list(void)
-{
-	ATOMIC_INIT_NOTIFIER_HEAD(&cpufreq_govinfo_notifier_list);
-	init_cpufreq_govinfo_notifier_list_called = true;
-	return 0;
-}
-pure_initcall(init_cpufreq_govinfo_notifier_list);
-#endif
 
 static int off __read_mostly;
 static int cpufreq_disabled(void)
@@ -1477,11 +1463,6 @@ static unsigned int __cpufreq_get(unsigned int cpu)
 
 	ret_freq = cpufreq_driver->get(cpu);
 
-#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
-	if (!policy)
-		return ret_freq;
-#endif
-
 	if (ret_freq && policy->cur &&
 		!(cpufreq_driver->flags & CPUFREQ_CONST_LOOPS)) {
 		/* verify no discrepancy between actual and
@@ -1654,12 +1635,7 @@ int cpufreq_register_notifier(struct notifier_block *nb, unsigned int list)
 	if (cpufreq_disabled())
 		return -EINVAL;
 
-#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	WARN_ON(!init_cpufreq_transition_notifier_list_called);
-#else
-	WARN_ON(!init_cpufreq_transition_notifier_list_called ||
-		!init_cpufreq_govinfo_notifier_list_called);
-#endif /* CONFIG_SEC_FORTUNA_PROJECT */
 
 	switch (list) {
 	case CPUFREQ_TRANSITION_NOTIFIER:
@@ -1670,12 +1646,6 @@ int cpufreq_register_notifier(struct notifier_block *nb, unsigned int list)
 		ret = blocking_notifier_chain_register(
 				&cpufreq_policy_notifier_list, nb);
 		break;
-#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
-	case CPUFREQ_GOVINFO_NOTIFIER:
-		ret = atomic_notifier_chain_register(
-				&cpufreq_govinfo_notifier_list, nb);
-		break;
-#endif
 	default:
 		ret = -EINVAL;
 	}
@@ -1710,12 +1680,6 @@ int cpufreq_unregister_notifier(struct notifier_block *nb, unsigned int list)
 		ret = blocking_notifier_chain_unregister(
 				&cpufreq_policy_notifier_list, nb);
 		break;
-#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
-	case CPUFREQ_GOVINFO_NOTIFIER:
-		ret = atomic_notifier_chain_unregister(
-				&cpufreq_govinfo_notifier_list, nb);
-		break;
-#endif
 	default:
 		ret = -EINVAL;
 	}
@@ -1748,7 +1712,6 @@ int __cpufreq_driver_target(struct cpufreq_policy *policy,
 	pr_debug("target for CPU %u: %u kHz, relation %u, requested %u kHz\n",
 			policy->cpu, target_freq, relation, old_target_freq);
 
-#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	/*
 	 * This might look like a redundant call as we are checking it again
 	 * after finding index. But it is left intentionally for cases where
@@ -1757,7 +1720,6 @@ int __cpufreq_driver_target(struct cpufreq_policy *policy,
 	 */
 	if (target_freq == policy->cur)
 		return 0;
-#endif
 
 	if (cpufreq_driver->target)
 		retval = cpufreq_driver->target(policy, target_freq, relation);
@@ -2241,11 +2203,15 @@ int cpufreq_register_driver(struct cpufreq_driver *driver_data)
 	cpufreq_driver = driver_data;
 	write_unlock_irqrestore(&cpufreq_driver_lock, flags);
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	register_hotcpu_notifier(&cpufreq_cpu_notifier);
 
 	get_online_cpus();
+#endif
 	ret = subsys_interface_register(&cpufreq_interface);
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	put_online_cpus();
+#endif
 	if (ret)
 		goto err_null_driver;
 
@@ -2267,14 +2233,18 @@ int cpufreq_register_driver(struct cpufreq_driver *driver_data)
 			goto err_if_unreg;
 		}
 	}
-
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
+	register_hotcpu_notifier(&cpufreq_cpu_notifier);
+#endif
 	pr_debug("driver %s up and running\n", driver_data->name);
 
 	return 0;
 err_if_unreg:
 	subsys_interface_unregister(&cpufreq_interface);
 err_null_driver:
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 	unregister_hotcpu_notifier(&cpufreq_cpu_notifier);
+#endif
 	write_lock_irqsave(&cpufreq_driver_lock, flags);
 	cpufreq_driver = NULL;
 	write_unlock_irqrestore(&cpufreq_driver_lock, flags);

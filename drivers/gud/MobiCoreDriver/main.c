@@ -520,7 +520,9 @@ static phys_addr_t get_mci_base_phys(unsigned int len)
 		ctx.mci_base.order = order;
 		ctx.mci_base.addr =
 			(void *)__get_free_pages(GFP_USER | __GFP_ZERO, order);
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 		ctx.mci_base.len = (1 << order) * PAGE_SIZE;
+#endif
 		if (ctx.mci_base.addr == NULL) {
 			MCDRV_DBG_WARN(mcd, "get_free_pages failed");
 			memset(&ctx.mci_base, 0, sizeof(ctx.mci_base));
@@ -740,8 +742,10 @@ found:
 		if (!ctx.mci_base.addr)
 			return -EFAULT;
 
+#if defined(CONFIG_SEC_FORTUNA_PROJECT)
 		if (len != ctx.mci_base.len)
 			return -EINVAL;
+#endif
 
 		vmarea->vm_flags |= VM_IO;
 		/* Convert kernel address to user address. Kernel address begins

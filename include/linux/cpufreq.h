@@ -16,7 +16,9 @@
 #include <linux/kobject.h>
 #include <linux/notifier.h>
 #include <linux/sysfs.h>
+#if !defined(CONFIG_SEC_FORTUNA_PROJECT)
 #include <asm/cputime.h>
+#endif
 
 /*********************************************************************
  *                        CPUFREQ INTERFACE                          *
@@ -548,6 +550,6 @@ void acct_update_power(struct task_struct *p, cputime_t cputime);
 static inline void acct_update_power(struct task_struct *p, cputime_t cputime) {}
 #endif
 #define MIN_FINGER_LIMIT 1344000
-#endif
+#endif /* not CONFIG_SEC_FORTUNA_PROJECT */
 
 #endif /* _LINUX_CPUFREQ_H */

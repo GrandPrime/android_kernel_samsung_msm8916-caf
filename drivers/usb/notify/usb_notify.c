@@ -466,7 +466,7 @@ static void otg_notify_state(unsigned long event, int enable)
 	if (!(type & NOTIFY_EVENT_NOSAVE)) {
 		u_notify->c_type = event;
 		u_notify->c_status = enable ?
-			NOTIFY_EVENT_ENBLING : NOTIFY_EVENT_DISABLING;
+			NOTIFY_EVENT_ENABLING : NOTIFY_EVENT_DISABLING;
 	}
 
 	switch (event) {
@@ -628,7 +628,7 @@ err:
 	if (!enable)
 		u_notify->c_type = NOTIFY_EVENT_NONE;
 	u_notify->c_status = enable ?
-			NOTIFY_EVENT_ENBLED : NOTIFY_EVENT_DISABLED;
+			NOTIFY_EVENT_ENABLED : NOTIFY_EVENT_DISABLED;
 
 no_save_event:
 	pr_info("%s- event=%s, cable=%s\n", __func__,
@@ -846,8 +846,8 @@ int set_notify_disable(bool disable)
 
 	if (disable) {
 		if (u_notify->c_type != NOTIFY_EVENT_NONE &&
-			(u_notify->c_status == NOTIFY_EVENT_ENBLED ||
-				u_notify->c_status == NOTIFY_EVENT_ENBLING)) {
+			(u_notify->c_status == NOTIFY_EVENT_ENABLED ||
+				u_notify->c_status == NOTIFY_EVENT_ENABLING)) {
 
 			pr_info("%s event=%s(%lu) disable\n", __func__,
 				event_string(u_notify->c_type),
